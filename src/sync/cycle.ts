@@ -1,6 +1,6 @@
-import type { SyncMode } from '../config.js';
 import { logger } from '../logger.js';
 import type { MusicProvider, Service, Track } from '../providers/types.js';
+import type { SyncMode } from '../repos/settings.js';
 import type { MatchResult, StateRepo } from '../repos/state.js';
 import { deleteDecision, readBlockReason } from './guards.js';
 import { bestMatch, pairLocally, scoreTracks } from './matcher.js';
@@ -116,7 +116,11 @@ export async function runCycle(deps: CycleDeps): Promise<CycleResult> {
   const now = (deps.now ?? (() => new Date()))();
   const summary = emptySummary();
 
-  const [appleRead, youtubeRead] = await Promise.all([apple.read(), youtube.read()]);
+  const read = (provider: MusicProvider) =>
+    provider.read().catch((error: unknown) => {
+      throw new Error(`${provider.service === 'apple' ? 'Apple Music' : 'YouTube Music'}: ${safeError(error).message}`);
+    });
+  const [appleRead, youtubeRead] = await Promise.all([read(apple), read(youtube)]);
   const links = await repo.getLinks();
   summary.appleSongs = appleRead.tracks.length;
   summary.youtubeSongs = youtubeRead.tracks.length;
@@ -243,6 +247,7 @@ export async function runCycle(deps: CycleDeps): Promise<CycleResult> {
       }
     }
 
+    if (match.status === 'ignored') continue;
     if (match.status === 'pending' || !match.targetId) {
       summary.pending += 1;
       continue;

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SyncMode } from '../src/config.js';
+import type { SyncMode } from '../src/repos/settings.js';
 import type { Track } from '../src/providers/types.js';
 import { runCycle, safeError, type CycleOptions } from '../src/sync/cycle.js';
 import { FakeRepo, fakeProvider } from './fakes.js';
@@ -175,6 +175,18 @@ describe('runCycle', () => {
       expect(repo.matches).toMatchObject([{ status: 'pending', reason: 'no_match', targetTitle: 'Nothing Alike' }]);
     });
 
+    it('leaves an ignored song alone', async () => {
+      repo.matches = [{ service: 'apple', sourceId: 'a', status: 'ignored', title: 'Song', artist: 'Band' }];
+      const apple = fakeProvider('apple', [song('a')]);
+      const youtube = fakeProvider('youtube', [], [song('y')]);
+
+      const { summary } = await cycle(apple, youtube, options('add-only'));
+
+      expect(youtube.search).not.toHaveBeenCalled();
+      expect(youtube.add).not.toHaveBeenCalled();
+      expect(summary.pending).toBe(0);
+    });
+
     it('marks an empty search as pending', async () => {
       const apple = fakeProvider('apple', [song('a')]);
       const youtube = fakeProvider('youtube', [], []);
@@ -331,9 +343,15 @@ describe('runCycle', () => {
       const youtube = fakeProvider('youtube', [song('y')]);
       youtube.read.mockRejectedValueOnce(new Error('expired'));
 
-      await expect(cycle(apple, youtube, options('full'))).rejects.toThrow('expired');
+      await expect(cycle(apple, youtube, options('full'))).rejects.toThrow('YouTube Music: expired');
       expect(apple.remove).not.toHaveBeenCalled();
     });
+  });
+
+  it('names the service in a failed read', async () => {
+    const apple = fakeProvider('apple', [song('a')]);
+    apple.read.mockRejectedValueOnce(Object.assign(new Error('Forbidden'), { response: { status: 403 } }));
+    await expect(cycle(apple, fakeProvider('youtube'), options('dry-run'))).rejects.toThrow('Apple Music: Forbidden (HTTP 403)');
   });
 
   describe('state upkeep', () => {

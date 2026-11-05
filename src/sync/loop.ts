@@ -25,29 +25,3 @@ export async function runAndRecord(deps: CycleDeps): Promise<CycleResult['status
     return 'failed';
   }
 }
-
-export interface SyncLoop {
-  stop(): Promise<void>;
-}
-
-/** Waits for the interval after each cycle ends, so cycles can never overlap. */
-export function startLoop(deps: CycleDeps, intervalMs: number): SyncLoop {
-  let stopped = false;
-  let timer: NodeJS.Timeout | undefined;
-  let current: Promise<unknown> = Promise.resolve();
-
-  const tick = () => {
-    current = runAndRecord(deps).then(() => {
-      if (!stopped) timer = setTimeout(tick, intervalMs);
-    });
-  };
-  tick();
-
-  return {
-    async stop() {
-      stopped = true;
-      clearTimeout(timer);
-      await current;
-    },
-  };
-}

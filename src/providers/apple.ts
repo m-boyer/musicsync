@@ -9,6 +9,7 @@ export interface AppleOptions {
   storefront: string;
   baseURL?: string;
   userTokenHeader?: UserTokenHeader;
+  maxRetries?: number;
 }
 
 export function createAppleClient(options: AppleOptions): Promise<AppleMusic> {
@@ -18,6 +19,7 @@ export function createAppleClient(options: AppleOptions): Promise<AppleMusic> {
     region: options.storefront as Region,
     ...(options.baseURL ? { baseURL: options.baseURL } : {}),
     ...(options.userTokenHeader ? { userTokenHeader: options.userTokenHeader } : {}),
+    ...(options.maxRetries === undefined ? {} : { maxRetries: options.maxRetries }),
   });
   return client.init().then(() => client);
 }

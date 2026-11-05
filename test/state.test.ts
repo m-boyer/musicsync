@@ -63,6 +63,17 @@ describe('PgStateRepo', () => {
     expect(query.mock.calls[0]?.[1]).toEqual(['youtube', 's']);
   });
 
+  it('finds one match', async () => {
+    const { repo } = setup([{ service: 'apple', source_id: 's', status: 'pending', title: 't', artist: 'r' }]);
+    expect(await repo.getMatch('apple', 's')).toMatchObject({ sourceId: 's' });
+    expect(await repo.getMatch('youtube', 's')).toBeUndefined();
+  });
+
+  it('maps recent runs', async () => {
+    const { repo } = setup([{ id: '1', started_at: at, finished_at: at, mode: 'full', status: 'ok', summary: {} }]);
+    expect(await repo.recentRuns(1)).toEqual([{ id: '1', startedAt: at, finishedAt: at, mode: 'full', status: 'ok', summary: {} }]);
+  });
+
   it('records a run and clears old ones', async () => {
     const { repo, query } = setup();
     await repo.recordRun({ startedAt: at, mode: 'full', status: 'ok', summary: { added: 1 } });

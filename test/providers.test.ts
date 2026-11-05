@@ -106,9 +106,10 @@ describe('YouTube provider', () => {
   const ugcColumns = JSON.parse(JSON.stringify(omvColumns).replace('OMV', 'UGC'));
   const songItem = { id: 'v1', title: 'Song', item_type: 'song', artists: [{ name: 'A' }, { name: 'B' }], duration: { seconds: 200 } };
 
-  function setup(loggedIn = true) {
+  function setup(loggedIn = true, accountWorks = true) {
     const client = {
       session: { logged_in: loggedIn },
+      account: { getInfo: vi.fn(async () => (accountWorks ? {} : Promise.reject(new Error('Page contents not found')))) },
       music: { getPlaylist: vi.fn(), search: vi.fn() },
       interact: { like: vi.fn(async () => ({})), removeRating: vi.fn(async () => ({})) },
     };
@@ -160,7 +161,14 @@ describe('YouTube provider', () => {
 
   it('fails on a session that is not signed in instead of reading no likes', async () => {
     const { provider, client } = setup(false);
-    await expect(provider.read()).rejects.toThrow('not signed in');
+    await expect(provider.read()).rejects.toThrow('no es válida');
+    expect(client.music.getPlaylist).not.toHaveBeenCalled();
+    expect(client.account.getInfo).not.toHaveBeenCalled();
+  });
+
+  it('fails on an expired cookie that YouTube.js still marks as signed in', async () => {
+    const { provider, client } = setup(true, false);
+    await expect(provider.read()).rejects.toThrow('no es válida');
     expect(client.music.getPlaylist).not.toHaveBeenCalled();
   });
 

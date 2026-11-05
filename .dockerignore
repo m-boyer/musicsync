@@ -4,5 +4,6 @@ dist
 .github
 .env
 .env*
+.next
 test
 *.md

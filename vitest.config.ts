@@ -7,8 +7,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      // probe.ts only runs by hand against the real services; index.ts only wires the pieces together.
-      exclude: ['src/probe.ts', 'src/index.ts'],
+      // These only wire the pieces together; they are covered by running the app in Docker.
+      exclude: ['src/runtime.ts', 'src/boot.ts', 'src/auth/server.ts', 'src/auth/client.ts', 'src/auth/guard.ts', 'src/probe/start.ts'],
       reporter: ['text', 'html', 'json-summary'],
       // The deploy pipeline runs `npm run test:coverage`; dropping below this fails the deploy.
       thresholds: { lines: 90, functions: 90, branches: 85, statements: 90 },

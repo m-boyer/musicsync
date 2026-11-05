@@ -1,5 +1,5 @@
-import type { SyncMode } from '../config.js';
 import type { ReadResult } from '../providers/types.js';
+import type { SyncMode } from '../repos/settings.js';
 
 /**
  * Why a cycle must not change anything, or undefined when the reads can be trusted. A service that

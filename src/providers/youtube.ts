@@ -25,6 +25,7 @@ interface PageLike {
 /** The parts of YouTube.js the provider uses. */
 export interface YouTubeClient {
   session: { logged_in: boolean };
+  account: { getInfo(): Promise<unknown> };
   music: {
     getPlaylist(id: string): Promise<PageLike>;
     search(query: string, filters: { type: 'song' }): Promise<{ songs?: { contents?: readonly unknown[] } | undefined }>;
@@ -72,8 +73,15 @@ function toTracks(items: readonly unknown[]): Track[] {
 export function createYouTubeProvider(create: () => Promise<YouTubeClient>): MusicProvider {
   const client = lazy(async () => {
     const created = await create();
-    // Without this, an expired cookie would look like an account with no likes.
-    if (!created.session.logged_in) throw new Error('YouTube session is not signed in; check YT_COOKIE');
+    // YouTube.js marks any cookie as signed in, and an expired one reads as an account with no
+    // likes. Reading the account fails instead, so it proves the session is real.
+    const signedIn =
+      created.session.logged_in &&
+      (await created.account.getInfo().then(
+        () => true,
+        () => false,
+      ));
+    if (!signedIn) throw new Error('La sesión de YouTube no es válida: cargá la cookie de nuevo');
     return created;
   });
 

@@ -5,7 +5,7 @@ import type { Link } from '../sync/reconcile.js';
 export interface MatchResult {
   service: Service;
   sourceId: string;
-  status: 'matched' | 'pending';
+  status: 'matched' | 'pending' | 'ignored';
   title: string;
   artist: string;
   targetId?: string | undefined;
@@ -31,6 +31,11 @@ export interface StateRepo {
   saveMatch(match: MatchResult): Promise<void>;
   deleteMatch(service: Service, sourceId: string): Promise<void>;
   recordRun(run: SyncRun): Promise<void>;
+}
+
+export interface RecordedRun extends SyncRun {
+  id: string;
+  finishedAt: Date;
 }
 
 const RUN_RETENTION = "now() - interval '30 days'";
@@ -120,6 +125,22 @@ export class PgStateRepo implements StateRepo {
 
   async deleteMatch(service: Service, sourceId: string): Promise<void> {
     await this.db.query('DELETE FROM match_results WHERE service = $1 AND source_id = $2', [service, sourceId]);
+  }
+
+  async getMatch(service: Service, sourceId: string): Promise<MatchResult | undefined> {
+    return (await this.getMatches()).find((match) => match.service === service && match.sourceId === sourceId);
+  }
+
+  async recentRuns(limit: number): Promise<RecordedRun[]> {
+    const { rows } = await this.db.query('SELECT * FROM sync_runs ORDER BY started_at DESC LIMIT $1', [limit]);
+    return rows.map((row) => ({
+      id: row.id,
+      startedAt: row.started_at,
+      finishedAt: row.finished_at,
+      mode: row.mode,
+      status: row.status,
+      summary: row.summary,
+    }));
   }
 
   async recordRun(run: SyncRun): Promise<void> {
