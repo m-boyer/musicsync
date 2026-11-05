@@ -18,7 +18,8 @@ WORKDIR /app
 ARG APP_REVISION=unknown
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV HOSTNAME=0.0.0.0
+# Dual-stack: Coolify probes `localhost`, which resolves to ::1 on Alpine.
+ENV HOSTNAME=::
 ENV PORT=3000
 ENV APP_REVISION=${APP_REVISION}
 
