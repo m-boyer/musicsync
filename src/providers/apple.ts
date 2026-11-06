@@ -1,6 +1,13 @@
-import { AppleMusic, AuthType, ResourceType, type Region, type UserTokenHeader } from '@syncfm/applemusic-api';
+import {
+  AppleMusic,
+  AuthType,
+  ResourceType,
+  type PlaylistRemoveStrategy,
+  type Region,
+  type UserTokenHeader,
+} from '@syncfm/applemusic-api';
 import { lazy } from './lazy.js';
-import type { MusicProvider, ReadResult, Track } from './types.js';
+import type { MusicProvider, PlaylistDirectory, PlaylistInfo, ReadResult, Track } from './types.js';
 
 const SEARCH_LIMIT = 5;
 
@@ -45,20 +52,30 @@ function toTrack(id: string, song: SongLike): Track {
   };
 }
 
-export function createAppleProvider(create: () => Promise<AppleMusic>): MusicProvider {
+/** Playlist songs by catalog id. Uploads have no catalog id, and a repeated song counts once. */
+export function playlistTracks(items: SongLike[]): Track[] {
+  const tracks = new Map<string, Track>();
+  for (const item of items) {
+    const catalogId = item.attributes?.playParams?.catalogId;
+    if (catalogId && !tracks.has(catalogId)) tracks.set(catalogId, { ...toTrack(catalogId, item), removeId: item.id });
+  }
+  return [...tracks.values()];
+}
+
+export interface ApplePlaylistOptions {
+  playlistId: string;
+  /** The way of removing songs that the connection test confirmed, if any. */
+  removeStrategy: PlaylistRemoveStrategy | null;
+}
+
+export function createAppleProvider(create: () => Promise<AppleMusic>, options: ApplePlaylistOptions): MusicProvider {
   const client = lazy(create);
   return {
     service: 'apple',
 
     async read(): Promise<ReadResult> {
-      const { songs, complete } = await (await client()).Library.getAllSongs();
-      const tracks: Track[] = [];
-      for (const song of songs) {
-        // Uploads have no catalog id, so they have no equivalent to sync.
-        const catalogId = song.attributes?.playParams?.catalogId;
-        if (catalogId) tracks.push({ ...toTrack(catalogId, song), removeId: song.id });
-      }
-      return { tracks, complete };
+      const { items, complete } = await (await client()).Library.getAllPlaylistTracks(options.playlistId);
+      return { tracks: playlistTracks(items), complete };
     },
 
     async search(track: Track): Promise<Track[]> {
@@ -74,12 +91,33 @@ export function createAppleProvider(create: () => Promise<AppleMusic>): MusicPro
     },
 
     async add(track: Track): Promise<void> {
-      await (await client()).Library.addSongs([track.id]);
+      await (await client()).Library.addTracksToPlaylist(options.playlistId, [track.id]);
     },
 
     async remove(track: Track): Promise<void> {
+      if (!options.removeStrategy) throw new Error('Quitar canciones de playlists de Apple Music no está verificado');
       if (!track.removeId) throw new Error(`Song ${track.id} has no Apple library id`);
-      await (await client()).Library.removeSong(track.removeId);
+      await (await client()).Library.removeTracksFromPlaylist(options.playlistId, [track.removeId], options.removeStrategy);
+    },
+  };
+}
+
+export function createAppleDirectory(create: () => Promise<AppleMusic>): PlaylistDirectory {
+  const client = lazy(create);
+  const editable = async (): Promise<PlaylistInfo[]> => {
+    const { items } = await (await client()).Library.getAllPlaylists();
+    return items
+      .filter((playlist) => playlist.attributes?.canEdit)
+      .map((playlist) => ({ id: playlist.id, name: playlist.attributes?.name ?? playlist.id }));
+  };
+  return {
+    list: editable,
+    async create(name) {
+      const playlist = await (await client()).Library.createPlaylist(name);
+      return { id: playlist.id, name: playlist.attributes?.name ?? name };
+    },
+    async isEditable(id) {
+      return (await editable()).some((playlist) => playlist.id === id);
     },
   };
 }

@@ -2,8 +2,13 @@ import pg from 'pg';
 import { createAuth, type Auth } from './auth/server.js';
 import { loadConfig, type Config } from './config.js';
 import { createPool } from './db/pool.js';
-import { createAppleClient, createAppleProvider } from './providers/apple.js';
-import { createYouTubeClient, createYouTubeProvider } from './providers/youtube.js';
+import { createAppleClient, createAppleDirectory, createAppleProvider } from './providers/apple.js';
+import type { PlaylistDirectory, Service } from './providers/types.js';
+import {
+  createYouTubeClient,
+  createYouTubeDirectory,
+  createYouTubeProvider,
+} from './providers/youtube.js';
 import { CredentialsRepo } from './repos/credentials.js';
 import { ProbeRepo } from './repos/probes.js';
 import { SettingsRepo } from './repos/settings.js';
@@ -23,6 +28,31 @@ export interface Runtime {
   controller: SyncController;
 }
 
+/**
+ * Playlist lists for the web. Built on demand and only used inside controller.exclusive(), since
+ * the Apple client shares one configuration with the sync.
+ */
+export async function getDirectories(runtime: Runtime): Promise<Partial<Record<Service, PlaylistDirectory>>> {
+  const [values, settings] = await Promise.all([runtime.credentials.values(), runtime.settings.get()]);
+  const apple = values.apple;
+  const youtube = values.youtube;
+  return {
+    ...(apple
+      ? {
+          apple: createAppleDirectory(() =>
+            createAppleClient({
+              userToken: apple,
+              storefront: settings.appleStorefront,
+              userTokenHeader: settings.appleUserTokenHeader,
+              ...(settings.appleBaseUrl ? { baseURL: settings.appleBaseUrl } : {}),
+            }),
+          ),
+        }
+      : {}),
+    ...(youtube ? { youtube: createYouTubeDirectory(() => createYouTubeClient(youtube)) } : {}),
+  };
+}
+
 const holder = globalThis as unknown as { __musicsyncRuntime?: Runtime };
 
 function create(): Runtime {
@@ -37,15 +67,18 @@ function create(): Runtime {
     getCredentials: () => credentials.values(),
     repo: state,
     createProviders: (values, current) => ({
-      apple: createAppleProvider(() =>
-        createAppleClient({
-          userToken: values.apple,
-          storefront: current.appleStorefront,
-          userTokenHeader: current.appleUserTokenHeader,
-          ...(current.appleBaseUrl ? { baseURL: current.appleBaseUrl } : {}),
-        }),
+      apple: createAppleProvider(
+        () =>
+          createAppleClient({
+            userToken: values.apple,
+            storefront: current.appleStorefront,
+            userTokenHeader: current.appleUserTokenHeader,
+            ...(current.appleBaseUrl ? { baseURL: current.appleBaseUrl } : {}),
+          }),
+        // The loader only builds providers once both playlists are chosen.
+        { playlistId: current.applePlaylist!.id, removeStrategy: current.appleRemoveStrategy },
       ),
-      youtube: createYouTubeProvider(() => createYouTubeClient(values.youtube)),
+      youtube: createYouTubeProvider(() => createYouTubeClient(values.youtube), current.youtubePlaylist!.id),
     }),
   });
 

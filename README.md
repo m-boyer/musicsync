@@ -1,6 +1,6 @@
 # musicsync
 
-Keeps your Apple Music library songs and your YouTube Music likes the same. A Next.js app runs the sync every few minutes and lets you manage it from the web.
+Keeps one Apple Music playlist and one YouTube Music playlist the same. A Next.js app runs the sync every few minutes and lets you manage it from the web.
 
 - **Apple Music:** [fork of applemusic-api](https://github.com/MatiasBoyer/applemusic-api).
 - **YouTube Music:** [YouTube.js](https://github.com/LuanRT/YouTube.js).
@@ -11,8 +11,9 @@ Both use unofficial interfaces, which can stop working without notice.
 
 - **Inicio:** status, last and next cycle, and a button to sync now.
 - **Credenciales:** load each service's token. They are stored encrypted and never shown again.
-- **Pruebas:** check what each service allows from the server, and choose the Apple connection that works.
-- **Ajustes:** mode, interval, limits and password. `full` is only allowed once the add and delete test passed on both services.
+- **Playlists:** choose or create the playlist to sync on each service. Changing either one restarts the pair in dry-run.
+- **Pruebas:** read both playlists, and add and remove a test song. Apple does not document removing songs from a playlist, so the test tries each known way and saves the one that works.
+- **Ajustes:** mode, interval, limits and password. `full` is only allowed once the add and remove test passed on both playlists.
 - **Historial:** recent cycles, with what was or would be added and deleted.
 - **Pendientes:** songs without a safe match: retry, ignore or pick the right song.
 
@@ -39,7 +40,9 @@ Everything else is set from the web.
 |---|---|
 | `dry-run` (default) | Reads, links songs already on both sides, and records what it would do. |
 | `add-only` | Adds new songs in both directions. |
-| `full` | Also replicates deletions. |
+| `full` | Also replicates removals. |
+
+Songs are matched, not their order, and a repeated song counts once.
 
 ## Safety rules
 

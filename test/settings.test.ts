@@ -55,6 +55,11 @@ describe('SettingsRepo', () => {
         add_grace_minutes: 30,
         match_threshold: 0.8,
         apple_storefront: 'ar',
+        apple_playlist_id: 'p.1',
+        apple_playlist_name: 'Mix',
+        youtube_playlist_id: null,
+        youtube_playlist_name: null,
+        apple_playlist_remove_strategy: 'query',
         apple_base_url: null,
         apple_user_token_header: 'Music-User-Token',
         apple_delete_verified_at: at,
@@ -67,7 +72,33 @@ describe('SettingsRepo', () => {
       appleStorefront: 'ar',
       appleDeleteVerifiedAt: at,
       youtubeDeleteVerifiedAt: null,
+      applePlaylist: { id: 'p.1', name: 'Mix' },
+      youtubePlaylist: null,
+      appleRemoveStrategy: 'query',
     });
+  });
+
+  it('chooses a playlist and resets the pair in one statement only when it changes', async () => {
+    const { db, query } = setup();
+    const repo = new SettingsRepo(db);
+    await repo.selectPlaylist('youtube', { id: 'PL1', name: 'Mix' });
+    const [sql, values] = query.mock.calls[0] ?? [];
+    expect(values).toEqual(['PL1', 'Mix']);
+    expect(sql).toContain('youtube_playlist_id IS DISTINCT FROM $1');
+    expect(sql).toContain('DELETE FROM track_links WHERE (SELECT changed FROM current)');
+    expect(sql).toContain('DELETE FROM match_results WHERE (SELECT changed FROM current)');
+    expect(sql).toContain("THEN 'dry-run' ELSE mode END");
+    expect(sql).toContain('apple_delete_verified_at = CASE WHEN (SELECT changed FROM current) THEN NULL');
+    expect(query).toHaveBeenCalledTimes(1);
+
+    await repo.selectPlaylist('apple', { id: 'p.1', name: 'Other' });
+    expect(query.mock.calls[1]?.[0]).toContain('apple_playlist_id = $1');
+  });
+
+  it('saves the Apple removal strategy', async () => {
+    const { db, query } = setup();
+    await new SettingsRepo(db).setAppleRemoveStrategy('body');
+    expect(query.mock.calls[0]?.[1]).toEqual(['body']);
   });
 
   it('updates editable values', async () => {

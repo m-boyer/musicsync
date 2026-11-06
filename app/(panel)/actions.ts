@@ -6,9 +6,10 @@ import { requireSession } from '../../src/auth/guard';
 import { logger } from '../../src/logger';
 import { APPLE_HEADERS, APPLE_HOSTS } from '../../src/probe/run';
 import { startProbe } from '../../src/probe/start';
+import type { PlaylistInfo } from '../../src/providers/types';
 import type { ProbeKind } from '../../src/repos/probes';
 import { canUseFullMode, editableSettings } from '../../src/repos/settings';
-import { getRuntime } from '../../src/runtime';
+import { getDirectories, getRuntime } from '../../src/runtime';
 import { safeError } from '../../src/sync/cycle';
 
 export interface FormState {
@@ -51,7 +52,7 @@ export async function saveSettings(_prev: FormState, data: FormData): Promise<Fo
   const current = await runtime.settings.get();
   if (parsed.data.mode === 'full' && current.mode !== 'full') {
     if (!canUseFullMode(current)) {
-      return { ok: false, message: 'El modo full requiere que la prueba de agregar y borrar pase en ambos servicios.' };
+      return { ok: false, message: 'El modo full requiere que la prueba de agregar y quitar pase en ambas playlists.' };
     }
     if (data.get('confirmFull') !== 'on') {
       return { ok: false, message: 'Confirmá que querés replicar borrados.' };
@@ -121,4 +122,71 @@ export async function pickMatch(
     });
   }
   revalidatePath('/pending');
+}
+
+const MAX_PLAYLIST_NAME = 100;
+
+/** Choosing another playlist restarts the pair, so it needs an explicit confirmation. */
+async function needsConfirmation(service: 'apple' | 'youtube', nextId: string | undefined): Promise<boolean> {
+  const settings = await getRuntime().settings.get();
+  const current = service === 'apple' ? settings.applePlaylist : settings.youtubePlaylist;
+  const other = service === 'apple' ? settings.youtubePlaylist : settings.applePlaylist;
+  return Boolean(current && other && current.id !== nextId);
+}
+
+export async function choosePlaylist(rawService: string, _prev: FormState, data: FormData): Promise<FormState> {
+  await requireSession();
+  const parsedService = service.parse(rawService);
+  const id = String(data.get('id') ?? '');
+  if (!id) return { ok: false, message: 'Elegí una playlist.' };
+  if ((await needsConfirmation(parsedService, id)) && data.get('confirmChange') !== 'on') {
+    return { ok: false, message: 'Confirmá el cambio: la sincronización del par actual vuelve a empezar.' };
+  }
+
+  const runtime = getRuntime();
+  try {
+    const playlist = await runtime.controller.exclusive(async (): Promise<PlaylistInfo | string> => {
+      const directory = (await getDirectories(runtime))[parsedService];
+      if (!directory) return 'Primero cargá la credencial de este servicio.';
+      const found = (await directory.list()).find((item) => item.id === id);
+      if (!found) return 'No encontré esa playlist.';
+      if (!(await directory.isEditable(id))) return 'Esa playlist no se puede editar desde tu cuenta.';
+      return found;
+    });
+    if (typeof playlist === 'string') return { ok: false, message: playlist };
+    await runtime.settings.selectPlaylist(parsedService, playlist);
+  } catch (error) {
+    return { ok: false, message: safeError(error).message };
+  } finally {
+    runtime.loader.reset();
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true, message: 'Playlist elegida.' };
+}
+
+export async function createPlaylist(rawService: string, _prev: FormState, data: FormData): Promise<FormState> {
+  await requireSession();
+  const parsedService = service.parse(rawService);
+  const name = String(data.get('name') ?? '').trim();
+  if (!name) return { ok: false, message: 'Escribí un nombre.' };
+  if (name.length > MAX_PLAYLIST_NAME) return { ok: false, message: 'El nombre es demasiado largo.' };
+  if ((await needsConfirmation(parsedService, undefined)) && data.get('confirmChange') !== 'on') {
+    return { ok: false, message: 'Confirmá el cambio: la sincronización del par actual vuelve a empezar.' };
+  }
+
+  const runtime = getRuntime();
+  try {
+    const playlist = await runtime.controller.exclusive(async () => {
+      const directory = (await getDirectories(runtime))[parsedService];
+      if (!directory) throw new Error('Primero cargá la credencial de este servicio.');
+      return directory.create(name);
+    });
+    await runtime.settings.selectPlaylist(parsedService, playlist);
+  } catch (error) {
+    return { ok: false, message: safeError(error).message };
+  } finally {
+    runtime.loader.reset();
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true, message: `Creada y elegida: ${name}.` };
 }

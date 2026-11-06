@@ -6,6 +6,7 @@ import { SignOut } from './sign-out';
 const LINKS = [
   ['/', 'Inicio'],
   ['/credentials', 'Credenciales'],
+  ['/playlists', 'Playlists'],
   ['/tests', 'Pruebas'],
   ['/settings', 'Ajustes'],
   ['/history', 'Historial'],

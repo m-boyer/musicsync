@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { MusicProvider, Service } from '../providers/types.js';
+import type { MusicProvider } from '../providers/types.js';
 import type { CredentialValues } from '../repos/credentials.js';
 import type { Settings } from '../repos/settings.js';
 import type { StateRepo } from '../repos/state.js';
@@ -35,10 +35,12 @@ export function createContextLoader(deps: ContextDeps): ContextLoader {
       const [settings, credentials] = await Promise.all([deps.getSettings(), deps.getCredentials()]);
       const intervalMs = settings.intervalSeconds * 1000;
 
-      const missing: Service[] = [];
+      const missing: string[] = [];
       if (!credentials.apple) missing.push('apple');
       if (!credentials.youtube) missing.push('youtube');
-      if (!credentials.apple || !credentials.youtube) {
+      if (!settings.applePlaylist) missing.push('apple_playlist');
+      if (!settings.youtubePlaylist) missing.push('youtube_playlist');
+      if (!credentials.apple || !credentials.youtube || missing.length > 0) {
         cached = undefined;
         return { status: 'not_configured', missing, mode: settings.mode, intervalMs };
       }
@@ -51,6 +53,9 @@ export function createContextLoader(deps: ContextDeps): ContextLoader {
             settings.appleStorefront,
             settings.appleBaseUrl,
             settings.appleUserTokenHeader,
+            settings.applePlaylist?.id,
+            settings.youtubePlaylist?.id,
+            settings.appleRemoveStrategy,
           ]),
         )
         .digest('hex');

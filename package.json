@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@sentry/node": "^11.11.0",
-    "@syncfm/applemusic-api": "git+https://github.com/MatiasBoyer/applemusic-api.git#v0.1.0",
+    "@syncfm/applemusic-api": "git+https://github.com/MatiasBoyer/applemusic-api.git#v0.2.0",
     "better-auth": "^1.7.18",
     "next": "^16.4.5",
     "pg": "^8.23.1",

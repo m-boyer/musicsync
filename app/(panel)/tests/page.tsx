@@ -1,7 +1,7 @@
 import { requireSession } from '../../../src/auth/guard';
 import { getRuntime } from '../../../src/runtime';
 import { AutoRefresh, LocalTime } from '../../components/client';
-import { Badge, Card, PageTitle, secondaryButtonClass } from '../../components/ui';
+import { Badge, Card, Notice, PageTitle, secondaryButtonClass } from '../../components/ui';
 import { saveAppleConnection } from '../actions';
 import { TestForms } from './forms';
 
@@ -16,12 +16,19 @@ export default async function TestsPage() {
       <AutoRefresh active={running} />
       <PageTitle title="Pruebas" description="Confirman qué permite cada servicio desde este servidor." />
       <div className="space-y-4">
-        <Card title="Estado del borrado">
+        {!settings.applePlaylist || !settings.youtubePlaylist ? (
+          <Notice tone="warn">Las pruebas usan las playlists elegidas: elegilas primero en Playlists.</Notice>
+        ) : null}
+
+        <Card title="Quitar canciones de la playlist">
           <ul className="space-y-1">
             <li>
               Apple Music:{' '}
               {settings.appleDeleteVerifiedAt ? <Badge tone="ok">Verificado</Badge> : <Badge tone="neutral">Sin verificar</Badge>}
             </li>
+            {settings.appleRemoveStrategy ? (
+              <li className="text-muted">Forma que funciona en Apple: {settings.appleRemoveStrategy}</li>
+            ) : null}
             <li>
               YouTube Music:{' '}
               {settings.youtubeDeleteVerifiedAt ? <Badge tone="ok">Verificado</Badge> : <Badge tone="neutral">Sin verificar</Badge>}

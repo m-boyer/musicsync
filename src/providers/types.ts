@@ -23,3 +23,16 @@ export interface MusicProvider {
   add(track: Track): Promise<void>;
   remove(track: Track): Promise<void>;
 }
+
+export interface PlaylistInfo {
+  id: string;
+  name: string;
+}
+
+/** Lists and creates the playlists the sync can use. */
+export interface PlaylistDirectory {
+  list(): Promise<PlaylistInfo[]>;
+  create(name: string): Promise<PlaylistInfo>;
+  /** Whether a playlist accepts changes from this account. */
+  isEditable(id: string): Promise<boolean>;
+}

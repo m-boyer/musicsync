@@ -1,10 +1,12 @@
 import { Innertube } from 'youtubei.js';
 import { lazy } from './lazy.js';
-import type { MusicProvider, ReadResult, Track } from './types.js';
+import type { MusicProvider, PlaylistDirectory, PlaylistInfo, ReadResult, Track } from './types.js';
 
-const LIKED_MUSIC_PLAYLIST = 'LM';
 const MAX_PAGES = 1000;
+const MAX_PLAYLIST_LIST_PAGES = 20;
 const SEARCH_LIMIT = 5;
+/** System lists that are not playlists you can sync into: likes, watch later, liked videos. */
+const SYSTEM_PLAYLISTS = new Set(['LM', 'WL', 'LL']);
 
 interface ItemLike {
   id?: string;
@@ -22,6 +24,12 @@ interface PageLike {
   getContinuation(): Promise<PageLike>;
 }
 
+interface PlaylistFeedLike {
+  playlists: readonly unknown[];
+  has_continuation: boolean;
+  getContinuation(): Promise<PlaylistFeedLike>;
+}
+
 /** The parts of YouTube.js the provider uses. */
 export interface YouTubeClient {
   session: { logged_in: boolean };
@@ -30,9 +38,12 @@ export interface YouTubeClient {
     getPlaylist(id: string): Promise<PageLike>;
     search(query: string, filters: { type: 'song' }): Promise<{ songs?: { contents?: readonly unknown[] } | undefined }>;
   };
-  interact: {
-    like(id: string): Promise<unknown>;
-    removeRating(id: string): Promise<unknown>;
+  getPlaylists(): Promise<PlaylistFeedLike>;
+  getPlaylist(id: string): Promise<{ info: { is_editable?: boolean } }>;
+  playlist: {
+    create(title: string, videoIds: string[], privacy?: 'PRIVATE'): Promise<{ playlist_id?: string }>;
+    addVideos(playlistId: string, videoIds: string[]): Promise<unknown>;
+    removeVideos(playlistId: string, videoIds: string[]): Promise<unknown>;
   };
 }
 
@@ -48,7 +59,7 @@ function musicVideoType(item: ItemLike): string | undefined {
     ?.musicVideoType;
 }
 
-/** Likes can include any YouTube video: keeps songs and official music videos only. */
+/** Keeps songs and official music videos only. */
 function isMusic(item: ItemLike): boolean {
   if (item.item_type === 'song') return true;
   return item.item_type === 'video' && musicVideoType(item) === 'MUSIC_VIDEO_TYPE_OMV';
@@ -70,11 +81,12 @@ function toTracks(items: readonly unknown[]): Track[] {
   return items.map((item) => toTrack(item as ItemLike)).filter((track): track is Track => track !== undefined);
 }
 
-export function createYouTubeProvider(create: () => Promise<YouTubeClient>): MusicProvider {
-  const client = lazy(async () => {
+/** Creates the client once and proves the session is real before any use. */
+export function signedInClient(create: () => Promise<YouTubeClient>): () => Promise<YouTubeClient> {
+  return lazy(async () => {
     const created = await create();
-    // YouTube.js marks any cookie as signed in, and an expired one reads as an account with no
-    // likes. Reading the account fails instead, so it proves the session is real.
+    // YouTube.js marks any cookie as signed in, and an expired one reads as an empty list.
+    // Reading the account fails instead, so it proves the session is real.
     const signedIn =
       created.session.logged_in &&
       (await created.account.getInfo().then(
@@ -84,20 +96,28 @@ export function createYouTubeProvider(create: () => Promise<YouTubeClient>): Mus
     if (!signedIn) throw new Error('La sesión de YouTube no es válida: cargá la cookie de nuevo');
     return created;
   });
+}
+
+export function createYouTubeProvider(create: () => Promise<YouTubeClient>, playlistId: string): MusicProvider {
+  const client = signedInClient(create);
 
   return {
     service: 'youtube',
 
     async read(): Promise<ReadResult> {
-      let page = await (await client()).music.getPlaylist(LIKED_MUSIC_PLAYLIST);
-      const tracks = toTracks(page.items);
+      let page = await (await client()).music.getPlaylist(playlistId);
+      const tracks = new Map<string, Track>();
+      const collect = (items: readonly unknown[]) => {
+        for (const track of toTracks(items)) if (!tracks.has(track.id)) tracks.set(track.id, track);
+      };
+      collect(page.items);
       let pages = 1;
       while (page.has_continuation && pages < MAX_PAGES) {
         page = await page.getContinuation();
-        tracks.push(...toTracks(page.items));
+        collect(page.items);
         pages += 1;
       }
-      return { tracks, complete: !page.has_continuation };
+      return { tracks: [...tracks.values()], complete: !page.has_continuation };
     },
 
     async search(track: Track): Promise<Track[]> {
@@ -106,11 +126,56 @@ export function createYouTubeProvider(create: () => Promise<YouTubeClient>): Mus
     },
 
     async add(track: Track): Promise<void> {
-      await (await client()).interact.like(track.id);
+      await (await client()).playlist.addVideos(playlistId, [track.id]);
     },
 
     async remove(track: Track): Promise<void> {
-      await (await client()).interact.removeRating(track.id);
+      await (await client()).playlist.removeVideos(playlistId, [track.id]);
+    },
+  };
+}
+
+interface PlaylistItemLike {
+  id?: string;
+  content_id?: string;
+  title?: { toString(): string } | string;
+  metadata?: { title?: { toString(): string } } | null;
+}
+
+function toPlaylistInfo(item: PlaylistItemLike): PlaylistInfo | undefined {
+  const id = item.id ?? item.content_id;
+  const name = (item.title ?? item.metadata?.title)?.toString();
+  if (!id || !name || SYSTEM_PLAYLISTS.has(id)) return undefined;
+  return { id, name };
+}
+
+export function createYouTubeDirectory(create: () => Promise<YouTubeClient>): PlaylistDirectory {
+  const client = signedInClient(create);
+  return {
+    async list() {
+      let feed = await (await client()).getPlaylists();
+      const playlists = new Map<string, PlaylistInfo>();
+      const collect = (items: readonly unknown[]) => {
+        for (const item of items) {
+          const info = toPlaylistInfo(item as PlaylistItemLike);
+          if (info && !playlists.has(info.id)) playlists.set(info.id, info);
+        }
+      };
+      collect(feed.playlists);
+      for (let pages = 1; feed.has_continuation && pages < MAX_PLAYLIST_LIST_PAGES; pages += 1) {
+        feed = await feed.getContinuation();
+        collect(feed.playlists);
+      }
+      return [...playlists.values()];
+    },
+    async create(name) {
+      const { playlist_id: id } = await (await client()).playlist.create(name, [], 'PRIVATE');
+      if (!id) throw new Error('YouTube no devolvió la playlist creada');
+      return { id, name };
+    },
+    async isEditable(id) {
+      if (SYSTEM_PLAYLISTS.has(id)) return false;
+      return (await (await client()).getPlaylist(id)).info.is_editable === true;
     },
   };
 }

@@ -5,6 +5,13 @@ import { LocalTime } from '../../components/client';
 import { Badge, Card, PageTitle } from '../../components/ui';
 import { MODE_LABELS, runStatus, SERVICE_NAMES } from '../labels';
 
+const MISSING: Record<string, string> = {
+  apple: 'token de Apple',
+  youtube: 'cookie de YouTube',
+  apple_playlist: 'playlist de Apple',
+  youtube_playlist: 'playlist de YouTube',
+};
+
 const COUNTS: [string, string][] = [
   ['appleSongs', 'En Apple'],
   ['youtubeSongs', 'En YouTube'],
@@ -63,7 +70,9 @@ export default async function HistoryPage() {
               </dl>
               {typeof summary.error === 'string' ? <p className="mt-2 text-bad break-words">{summary.error}</p> : null}
               {typeof summary.blockedReason === 'string' ? <p className="mt-2 text-warn">Motivo: {summary.blockedReason}</p> : null}
-              {Array.isArray(summary.missing) ? <p className="mt-2 text-muted">Faltan credenciales: {summary.missing.join(', ')}</p> : null}
+              {Array.isArray(summary.missing) ? (
+                <p className="mt-2 text-muted">Falta configurar: {summary.missing.map((item) => MISSING[String(item)] ?? String(item)).join(', ')}</p>
+              ) : null}
               {summary.deleteDecision === 'over_limit' ? <p className="mt-2 text-warn">No se borró nada: se superó el límite por ciclo.</p> : null}
               <Songs title={run.mode === 'dry-run' ? 'Se agregarían' : 'Agregadas'} songs={(summary.addSample as SongSummary[]) ?? []} />
               <Songs title={summary.deleted ? 'Borradas' : 'Se borrarían'} songs={(summary.deleteSample as SongSummary[]) ?? []} />

@@ -11,7 +11,7 @@ export function TestForms({ disabled }: { disabled: boolean }) {
   return (
     <>
       <Card title="Probar lectura">
-        <p className="mb-3 text-muted">Solo lee. Muestra qué combinación funciona en Apple Music y si YouTube sigue con sesión.</p>
+        <p className="mb-3 text-muted">Solo lee. Muestra qué conexión funciona en Apple Music y lee las dos playlists elegidas.</p>
         <form action={readAction}>
           {readState.message ? <div className="mb-3"><Notice tone="bad">{readState.message}</Notice></div> : null}
           <button className={buttonClass} disabled={disabled || readPending}>Probar lectura</button>
@@ -19,7 +19,7 @@ export function TestForms({ disabled }: { disabled: boolean }) {
       </Card>
       <Card title="Probar agregar y borrar">
         <p className="mb-3 text-muted">
-          Agrega y quita una canción en cada servicio, y puede tardar unos minutos. No toca ninguna que ya tengas, así que elegí una que no tengas en ninguno de los dos.
+          Agrega y quita una canción en cada playlist elegida, y puede tardar unos minutos. No toca ninguna que ya esté en ellas, así que elegí una que no esté en ninguna de las dos.
         </p>
         <form action={writeAction} className="space-y-3">
           <label className="block">

@@ -184,6 +184,9 @@ describe('createContextLoader', () => {
     addGraceMinutes: 10,
     matchThreshold: 0.9,
     appleStorefront: 'ar',
+    applePlaylist: { id: 'p.apple', name: 'Mix' },
+    youtubePlaylist: { id: 'PLyoutube', name: 'Mix' },
+    appleRemoveStrategy: null,
     appleBaseUrl: null,
     appleUserTokenHeader: 'Music-User-Token',
     appleDeleteVerifiedAt: null,
@@ -191,10 +194,10 @@ describe('createContextLoader', () => {
   };
   const provider = (service: 'apple' | 'youtube'): MusicProvider => fakeProvider(service).provider;
 
-  function setup(credentials: { apple?: string; youtube?: string }) {
+  function setup(credentials: { apple?: string; youtube?: string }, current: Settings = settings) {
     const createProviders = vi.fn(() => ({ apple: provider('apple'), youtube: provider('youtube') }));
     const loader = createContextLoader({
-      getSettings: async () => settings,
+      getSettings: async () => current,
       getCredentials: async () => credentials,
       createProviders,
       repo: new FakeRepo(),
@@ -207,6 +210,24 @@ describe('createContextLoader', () => {
     expect(await loader.load()).toEqual({ status: 'not_configured', missing: ['youtube'], mode: 'add-only', intervalMs: 120_000 });
     expect((await setup({ youtube: 'y' }).loader.load())).toMatchObject({ missing: ['apple'] });
     expect(createProviders).not.toHaveBeenCalled();
+  });
+
+  it('reports playlists that are not chosen yet', async () => {
+    const { loader, createProviders } = setup(
+      { apple: 'a', youtube: 'y' },
+      { ...settings, applePlaylist: null, youtubePlaylist: null },
+    );
+    expect(await loader.load()).toMatchObject({ status: 'not_configured', missing: ['apple_playlist', 'youtube_playlist'] });
+    expect(createProviders).not.toHaveBeenCalled();
+  });
+
+  it('builds new clients when the chosen playlist changes', async () => {
+    const current = { ...settings };
+    const { loader, createProviders } = setup({ apple: 'a', youtube: 'y' }, current);
+    await loader.load();
+    current.youtubePlaylist = { id: 'PLother', name: 'Other' };
+    await loader.load();
+    expect(createProviders).toHaveBeenCalledTimes(2);
   });
 
   it('maps settings to the cycle', async () => {

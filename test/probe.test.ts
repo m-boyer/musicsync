@@ -4,48 +4,70 @@ import { APPLE_HEADERS, APPLE_HOSTS, runReadProbe, runWriteProbe, type ProbeDeps
 import type { ProbeStep } from '../src/repos/probes.js';
 import { fakeProvider } from './fakes.js';
 
-const librarySong = { id: 'i.1', attributes: { playParams: { catalogId: 'c1' } } };
+const entry = { id: 'i.1', attributes: { playParams: { catalogId: 'c1' } } };
+const COMBINATIONS = APPLE_HOSTS.length * APPLE_HEADERS.length;
 
 function appleFake() {
   const Library = {
     getSongs: vi.fn(async () => ({ data: [], meta: { total: 3 } })),
-    getAllSongs: vi.fn(async () => ({ songs: [] as (typeof librarySong)[], complete: true })),
-    addSongs: vi.fn(async () => {}),
-    removeSong: vi.fn(async () => {}),
+    getAllPlaylistTracks: vi.fn(async () => ({ items: [] as (typeof entry)[], complete: true })),
+    addTracksToPlaylist: vi.fn(async () => {}),
+    removeTracksFromPlaylist: vi.fn(async (_playlist: string, _ids: string[], _strategy: string) => {}),
   };
   const Search = { search: vi.fn(async () => ({ results: { songs: { data: [{ id: 'c1', attributes: { name: 'Test' } }] } } })) };
   return { Library, Search, client: { Library, Search } as unknown as AppleMusic };
 }
 
+/** The playlist has the song only between adding it and a removal that works. */
+function livePlaylist(apple: ReturnType<typeof appleFake>, worksWith?: string) {
+  let has = false;
+  apple.Library.addTracksToPlaylist.mockImplementation(async () => {
+    has = true;
+  });
+  apple.Library.removeTracksFromPlaylist.mockImplementation(async (_p, _ids, strategy) => {
+    if (!worksWith || strategy === worksWith) has = false;
+  });
+  apple.Library.getAllPlaylistTracks.mockImplementation(async () => ({ items: has ? [entry] : [], complete: true }));
+}
+
 function setup(overrides: Partial<ProbeDeps> = {}, apple = appleFake()) {
   const steps: ProbeStep[] = [];
-  const markDeleteVerified = vi.fn(async () => {});
+  const appleRemovalVerified = vi.fn(async () => {});
+  const youtubeRemovalVerified = vi.fn(async () => {});
   const deps: ProbeDeps = {
     appleToken: 'token',
+    applePlaylistId: 'p.1',
     storefront: 'ar',
     createAppleClient: vi.fn(async () => apple.client),
     youtube: undefined,
     report: async (step) => {
       steps.push(step);
     },
-    markDeleteVerified,
+    appleRemovalVerified,
+    youtubeRemovalVerified,
     waitMs: 0,
     ...overrides,
   };
-  return { deps, steps, apple, markDeleteVerified };
+  return { deps, steps, apple, appleRemovalVerified, youtubeRemovalVerified };
 }
 
 const named = (steps: ProbeStep[], text: string) => steps.filter((step) => step.name.includes(text));
 
 describe('runReadProbe', () => {
-  it('tries every Apple combination and offers the ones that work', async () => {
-    const { deps, steps } = setup();
+  it('tries every Apple connection, tries the saved one first, and reads the playlist', async () => {
+    const { deps, steps, apple } = setup({
+      preferredConnection: { baseUrl: APPLE_HOSTS[1]!, header: APPLE_HEADERS[1]! },
+    });
+    apple.Library.getAllPlaylistTracks.mockResolvedValue({ items: [entry], complete: true });
+
     await runReadProbe(deps);
-    expect(deps.createAppleClient).toHaveBeenCalledTimes(APPLE_HOSTS.length * APPLE_HEADERS.length);
-    expect(steps[0]).toMatchObject({ ok: true, detail: '3 canciones', connection: { baseUrl: APPLE_HOSTS[0], header: APPLE_HEADERS[0] } });
+
+    expect(deps.createAppleClient).toHaveBeenCalledTimes(COMBINATIONS + 1);
+    expect(steps[0]).toMatchObject({ ok: true, connection: { baseUrl: APPLE_HOSTS[1], header: APPLE_HEADERS[1] } });
+    expect(named(steps, 'leer la playlist')[0]).toMatchObject({ ok: true, detail: '1 canciones' });
   });
 
-  it('reports a failed combination without credentials', async () => {
+  it('reports a failed connection without credentials', async () => {
     const { deps, steps } = setup({
       createAppleClient: vi.fn(async () => {
         throw Object.assign(new Error('Forbidden'), { response: { status: 403 }, config: { headers: { token: 'secret' } } });
@@ -56,133 +78,128 @@ describe('runReadProbe', () => {
     expect(JSON.stringify(steps)).not.toContain('secret');
   });
 
-  it('reports missing credentials', async () => {
-    const { deps, steps } = setup({ appleToken: undefined });
+  it('reports an incomplete or failed playlist read', async () => {
+    const { deps, steps, apple } = setup();
+    apple.Library.getAllPlaylistTracks.mockResolvedValueOnce({ items: [], complete: false });
     await runReadProbe(deps);
-    expect(steps).toEqual([
+    expect(named(steps, 'leer la playlist')[0]).toMatchObject({ ok: false, detail: '0 canciones, lectura incompleta' });
+
+    apple.Library.getAllPlaylistTracks.mockRejectedValueOnce(new Error('gone'));
+    await runReadProbe(deps);
+    expect(named(steps, 'leer la playlist')[1]).toMatchObject({ ok: false, detail: 'gone' });
+  });
+
+  it('reports what is missing', async () => {
+    const noPlaylist = setup({ applePlaylistId: undefined, youtubeMissing: 'Falta elegir la playlist' });
+    await runReadProbe(noPlaylist.deps);
+    expect(named(noPlaylist.steps, 'Apple: playlist')[0]?.detail).toBe('Falta elegir la playlist');
+    expect(noPlaylist.steps.at(-1)).toEqual({ name: 'YouTube', ok: false, detail: 'Falta elegir la playlist' });
+
+    const noToken = setup({ appleToken: undefined });
+    await runReadProbe(noToken.deps);
+    expect(noToken.steps).toEqual([
       { name: 'Apple', ok: false, detail: 'Falta cargar el token' },
       { name: 'YouTube', ok: false, detail: 'Falta cargar la cookie' },
     ]);
   });
 
-  it('reports a YouTube read, complete or not', async () => {
+  it('reports the YouTube playlist read', async () => {
     const youtube = fakeProvider('youtube', [{ id: 'y', title: 't', artist: 'a' }]);
     const { deps, steps } = setup({ appleToken: undefined, youtube: youtube.provider });
     await runReadProbe(deps);
     expect(named(steps, 'YouTube')[0]).toMatchObject({ ok: true, detail: '1 canciones' });
 
-    youtube.read.mockResolvedValueOnce({ tracks: [], complete: false });
-    await runReadProbe(deps);
-    expect(named(steps, 'YouTube')[1]).toMatchObject({ ok: false });
-
     youtube.read.mockRejectedValueOnce(new Error('expired'));
     await runReadProbe(deps);
-    expect(named(steps, 'YouTube')[2]).toMatchObject({ ok: false, detail: 'expired' });
+    expect(named(steps, 'YouTube')[1]).toMatchObject({ ok: false, detail: 'expired' });
   });
 });
 
 describe('runWriteProbe on Apple', () => {
-  /** The library has the song only between adding it and removing it. */
-  function liveLibrary(apple: ReturnType<typeof appleFake>) {
-    let has = false;
-    apple.Library.addSongs.mockImplementation(async () => {
-      has = true;
-    });
-    apple.Library.removeSong.mockImplementation(async () => {
-      has = false;
-    });
-    apple.Library.getAllSongs.mockImplementation(async () => ({ songs: has ? [librarySong] : [], complete: true }));
-  }
-
-  it('adds, removes and only then marks deleting as verified', async () => {
+  it('adds, finds the removal that works and saves it', async () => {
     const apple = appleFake();
-    liveLibrary(apple);
-    const { deps, steps, markDeleteVerified } = setup({}, apple);
+    livePlaylist(apple, 'body');
+    const { deps, steps, appleRemovalVerified } = setup({}, apple);
 
     await runWriteProbe(deps, 'test song');
 
-    expect(apple.Library.addSongs).toHaveBeenCalledWith(['c1']);
-    expect(apple.Library.removeSong).toHaveBeenCalledWith('i.1');
-    expect(named(steps, 'confirmar')[0]).toMatchObject({ ok: true });
-    expect(markDeleteVerified).toHaveBeenCalledWith('apple');
+    expect(apple.Library.addTracksToPlaylist).toHaveBeenCalledWith('p.1', ['c1']);
+    expect(apple.Library.removeTracksFromPlaylist).toHaveBeenNthCalledWith(1, 'p.1', ['i.1'], 'query');
+    expect(apple.Library.removeTracksFromPlaylist).toHaveBeenNthCalledWith(2, 'p.1', ['i.1'], 'body');
+    expect(named(steps, 'quitar (query)')[0]).toMatchObject({ ok: false, detail: expect.stringContaining('sigue') });
+    expect(named(steps, 'quitar (body)')[0]?.ok).toBe(true);
+    expect(appleRemovalVerified).toHaveBeenCalledWith({ strategy: 'body', baseUrl: APPLE_HOSTS[0], header: APPLE_HEADERS[0] });
   });
 
-  it('refuses to touch a song already in the library', async () => {
+  it('refuses to touch a song already in the playlist', async () => {
     const apple = appleFake();
-    apple.Library.getAllSongs.mockResolvedValue({ songs: [librarySong], complete: true });
-    const { deps, steps, markDeleteVerified } = setup({}, apple);
+    apple.Library.getAllPlaylistTracks.mockResolvedValue({ items: [entry], complete: true });
+    const { deps, steps, appleRemovalVerified } = setup({}, apple);
 
     await runWriteProbe(deps, 'test song');
 
-    expect(apple.Library.addSongs).not.toHaveBeenCalled();
-    expect(apple.Library.removeSong).not.toHaveBeenCalled();
-    expect(markDeleteVerified).not.toHaveBeenCalled();
+    expect(apple.Library.addTracksToPlaylist).not.toHaveBeenCalled();
+    expect(apple.Library.removeTracksFromPlaylist).not.toHaveBeenCalled();
+    expect(appleRemovalVerified).not.toHaveBeenCalled();
     expect(named(steps, 'canción de prueba')[0]?.ok).toBe(false);
   });
 
-  it('tries the next combination when removing fails, and tells you if none works', async () => {
+  it('keeps full blocked and tells you to remove it by hand when nothing works', async () => {
     const apple = appleFake();
-    liveLibrary(apple);
-    apple.Library.removeSong.mockRejectedValue(new Error('Method not allowed'));
-    const { deps, steps, markDeleteVerified } = setup({}, apple);
+    livePlaylist(apple);
+    apple.Library.removeTracksFromPlaylist.mockRejectedValue(new Error('Method not allowed'));
+    const { deps, steps, appleRemovalVerified } = setup({}, apple);
 
     await runWriteProbe(deps, 'test song');
 
-    expect(apple.Library.addSongs).toHaveBeenCalledTimes(1);
-    expect(apple.Library.removeSong).toHaveBeenCalledTimes(APPLE_HOSTS.length * APPLE_HEADERS.length);
-    expect(steps.at(-2)?.detail).toContain('Quitala a mano');
-    expect(markDeleteVerified).not.toHaveBeenCalled();
+    expect(apple.Library.removeTracksFromPlaylist).toHaveBeenCalledTimes(COMBINATIONS * 2);
+    expect(named(steps, 'Apple: quitar').at(-1)?.detail).toContain('Quitala a mano');
+    expect(appleRemovalVerified).not.toHaveBeenCalled();
   });
 
   it('warns when the added song never shows up', async () => {
     const apple = appleFake();
-    const { deps, steps, markDeleteVerified } = setup({}, apple);
+    const { deps, steps, appleRemovalVerified } = setup({}, apple);
     await runWriteProbe(deps, 'test song');
     expect(named(steps, 'ver la canción')[0]).toMatchObject({ ok: false });
-    expect(apple.Library.removeSong).not.toHaveBeenCalled();
-    expect(markDeleteVerified).not.toHaveBeenCalled();
+    expect(apple.Library.removeTracksFromPlaylist).not.toHaveBeenCalled();
+    expect(appleRemovalVerified).not.toHaveBeenCalled();
   });
 
-  it('does not verify when the song stays after removing', async () => {
+  it('stops when adding fails or there is no result or connection', async () => {
     const apple = appleFake();
-    apple.Library.getAllSongs
-      .mockResolvedValueOnce({ songs: [], complete: true })
-      .mockResolvedValue({ songs: [librarySong], complete: true });
-    const { deps, steps, markDeleteVerified } = setup({}, apple);
-    await runWriteProbe(deps, 'test song');
-    expect(named(steps, 'confirmar')[0]).toMatchObject({ ok: false });
-    expect(markDeleteVerified).not.toHaveBeenCalled();
+    apple.Library.addTracksToPlaylist.mockRejectedValue(new Error('nope'));
+    const failed = setup({}, apple);
+    await runWriteProbe(failed.deps, 'x');
+    expect(named(failed.steps, 'agregar')[0]).toMatchObject({ ok: false, detail: 'nope' });
+
+    const empty = appleFake();
+    empty.Search.search.mockResolvedValue({ results: {} } as never);
+    const noResult = setup({}, empty);
+    await runWriteProbe(noResult.deps, 'x');
+    expect(named(noResult.steps, 'buscar')[0]?.detail).toBe('Sin resultados');
+
+    const broken = appleFake();
+    broken.Library.getSongs.mockRejectedValue(new Error('no'));
+    const noConnection = setup({}, broken);
+    await runWriteProbe(noConnection.deps, 'x');
+    expect(broken.Search.search).not.toHaveBeenCalled();
   });
 
-  it('tries the next combination when adding fails', async () => {
-    const apple = appleFake();
-    apple.Library.addSongs.mockRejectedValue(new Error('nope'));
-    const { deps, steps } = setup({}, apple);
-    await runWriteProbe(deps, 'test song');
-    expect(named(steps, 'agregar con').every((step) => !step.ok)).toBe(true);
-    expect(apple.Library.removeSong).not.toHaveBeenCalled();
-  });
+  it('reports missing setup and unexpected failures', async () => {
+    const missing = setup({ applePlaylistId: undefined });
+    await runWriteProbe(missing.deps, 'x');
+    expect(missing.steps[0]).toEqual({ name: 'Apple', ok: false, detail: 'Falta elegir la playlist' });
 
-  it('handles no search result and no working combination', async () => {
-    const apple = appleFake();
-    apple.Search.search.mockResolvedValue({ results: {} } as never);
-    const first = setup({}, apple);
-    await runWriteProbe(first.deps, 'x');
-    expect(named(first.steps, 'buscar')[0]?.detail).toBe('Sin resultados');
+    const noToken = setup({ appleToken: undefined });
+    await runWriteProbe(noToken.deps, 'x');
+    expect(noToken.steps[0]).toEqual({ name: 'Apple', ok: false, detail: 'Falta cargar el token' });
 
-    const failing = appleFake();
-    failing.Library.getSongs.mockRejectedValue(new Error('no'));
-    const second = setup({}, failing);
-    await runWriteProbe(second.deps, 'x');
-    expect(failing.Search.search).not.toHaveBeenCalled();
-  });
-
-  it('reports an unexpected failure', async () => {
     const apple = appleFake();
     apple.Search.search.mockRejectedValue(new Error('search down'));
-    const { deps, steps } = setup({}, apple);
-    await runWriteProbe(deps, 'x');
-    expect(steps.at(-2)).toEqual({ name: 'Apple', ok: false, detail: 'search down' });
+    const failing = setup({}, apple);
+    await runWriteProbe(failing.deps, 'x');
+    expect(failing.steps.at(-2)).toEqual({ name: 'Apple', ok: false, detail: 'search down' });
   });
 });
 
@@ -191,72 +208,66 @@ describe('runWriteProbe on YouTube', () => {
 
   function live() {
     const youtube = fakeProvider('youtube', [], [song]);
-    let liked = false;
+    let has = false;
     youtube.add.mockImplementation(async () => {
-      liked = true;
+      has = true;
     });
     youtube.remove.mockImplementation(async () => {
-      liked = false;
+      has = false;
     });
-    youtube.read.mockImplementation(async () => ({ tracks: liked ? [song] : [], complete: true }));
+    youtube.read.mockImplementation(async () => ({ tracks: has ? [song] : [], complete: true }));
     return youtube;
   }
 
-  it('likes, removes and only then marks deleting as verified', async () => {
+  it('adds, removes and only then marks removing as verified', async () => {
     const youtube = live();
-    const { deps, steps, markDeleteVerified } = setup({ appleToken: undefined, youtube: youtube.provider });
-
+    const { deps, steps, youtubeRemovalVerified } = setup({ appleToken: undefined, youtube: youtube.provider });
     await runWriteProbe(deps, 'test song');
-
     expect(youtube.add).toHaveBeenCalledWith(song);
     expect(youtube.remove).toHaveBeenCalledWith(song);
-    expect(named(steps, 'quitar Me gusta')[0]?.ok).toBe(true);
-    expect(markDeleteVerified).toHaveBeenCalledWith('youtube');
+    expect(named(steps, 'quitar de la playlist')[0]?.ok).toBe(true);
+    expect(youtubeRemovalVerified).toHaveBeenCalled();
   });
 
-  it('refuses to touch a song already liked', async () => {
+  it('refuses to touch a song already in the playlist', async () => {
     const youtube = fakeProvider('youtube', [song], [song]);
     const { deps, steps } = setup({ appleToken: undefined, youtube: youtube.provider });
     await runWriteProbe(deps, 'test song');
     expect(youtube.add).not.toHaveBeenCalled();
-    expect(youtube.remove).not.toHaveBeenCalled();
     expect(named(steps, 'canción de prueba')[0]?.ok).toBe(false);
   });
 
-  it('stops when the like never shows up or the read fails', async () => {
-    const youtube = fakeProvider('youtube', [], [song]);
-    const { deps, steps } = setup({ appleToken: undefined, youtube: youtube.provider });
-    await runWriteProbe(deps, 'test song');
-    expect(named(steps, 'dar Me gusta')[0]?.ok).toBe(false);
-    expect(youtube.remove).not.toHaveBeenCalled();
+  it('stops when the song never shows up, and does not verify when it stays', async () => {
+    const neverShows = fakeProvider('youtube', [], [song]);
+    const first = setup({ appleToken: undefined, youtube: neverShows.provider });
+    await runWriteProbe(first.deps, 'test song');
+    expect(named(first.steps, 'agregar a la playlist')[0]?.ok).toBe(false);
+    expect(neverShows.remove).not.toHaveBeenCalled();
 
+    const stays = live();
+    stays.remove.mockImplementation(async () => {});
+    const second = setup({ appleToken: undefined, youtube: stays.provider });
+    await runWriteProbe(second.deps, 'test song');
+    expect(named(second.steps, 'quitar de la playlist')[0]?.ok).toBe(false);
+    expect(second.youtubeRemovalVerified).not.toHaveBeenCalled();
+  });
+
+  it('handles a failed read, no search result and unexpected failures', async () => {
+    const youtube = live();
     youtube.read.mockRejectedValueOnce(new Error('expired'));
-    const count = youtube.add.mock.calls.length;
-    await runWriteProbe(deps, 'test song');
-    expect(youtube.add).toHaveBeenCalledTimes(count);
-  });
+    const first = setup({ appleToken: undefined, youtube: youtube.provider });
+    await runWriteProbe(first.deps, 'x');
+    expect(youtube.search).not.toHaveBeenCalled();
 
-  it('does not verify when the like stays', async () => {
-    const youtube = live();
-    youtube.remove.mockImplementation(async () => {});
-    const { deps, steps, markDeleteVerified } = setup({ appleToken: undefined, youtube: youtube.provider });
-    await runWriteProbe(deps, 'test song');
-    expect(named(steps, 'quitar Me gusta')[0]?.ok).toBe(false);
-    expect(markDeleteVerified).not.toHaveBeenCalled();
-  });
+    const empty = fakeProvider('youtube', [], []);
+    const second = setup({ appleToken: undefined, youtube: empty.provider });
+    await runWriteProbe(second.deps, 'x');
+    expect(named(second.steps, 'buscar')[0]?.detail).toBe('Sin resultados');
 
-  it('handles no search result', async () => {
-    const youtube = fakeProvider('youtube', [], []);
-    const { deps, steps } = setup({ appleToken: undefined, youtube: youtube.provider });
-    await runWriteProbe(deps, 'x');
-    expect(named(steps, 'buscar')[0]?.detail).toBe('Sin resultados');
-  });
-
-  it('reports an unexpected failure', async () => {
-    const youtube = live();
-    youtube.add.mockRejectedValue(new Error('like failed'));
-    const { deps, steps } = setup({ appleToken: undefined, youtube: youtube.provider });
-    await runWriteProbe(deps, 'test song');
-    expect(steps.at(-1)).toEqual({ name: 'YouTube', ok: false, detail: 'like failed' });
+    const failing = live();
+    failing.add.mockRejectedValue(new Error('add failed'));
+    const third = setup({ appleToken: undefined, youtube: failing.provider });
+    await runWriteProbe(third.deps, 'x');
+    expect(third.steps.at(-1)).toEqual({ name: 'YouTube', ok: false, detail: 'add failed' });
   });
 });

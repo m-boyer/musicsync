@@ -24,11 +24,15 @@ export default async function HomePage() {
   return (
     <>
       <AutoRefresh active={state.running} />
-      <PageTitle title="Inicio" description="Biblioteca de Apple Music ↔ Me gusta de YouTube Music." />
+      <PageTitle title="Inicio" description="Sincroniza una playlist de Apple Music con una de YouTube Music." />
       <div className="space-y-4">
         {credentials.length < 2 ? (
           <Notice tone="warn">
             Faltan credenciales. <Link className="underline" href="/credentials">Cargalas acá</Link>.
+          </Notice>
+        ) : !settings.applePlaylist || !settings.youtubePlaylist ? (
+          <Notice tone="warn">
+            Falta elegir las playlists. <Link className="underline" href="/playlists">Elegilas acá</Link>.
           </Notice>
         ) : null}
 
@@ -36,7 +40,10 @@ export default async function HomePage() {
           title="Sincronización"
           footer={
             <form action={runNow}>
-              <button className={buttonClass} disabled={state.running || credentials.length < 2}>
+              <button
+                className={buttonClass}
+                disabled={state.running || credentials.length < 2 || !settings.applePlaylist || !settings.youtubePlaylist}
+              >
                 {state.running ? 'Sincronizando…' : 'Sincronizar ahora'}
               </button>
             </form>
@@ -67,12 +74,14 @@ export default async function HomePage() {
             const age = credential ? tokenAgeDays(credential.updatedAt) : 0;
             const tone: Tone = !credential ? 'bad' : service === 'apple' && age >= TOKEN_WARN_DAYS ? 'warn' : 'ok';
             const songs = service === 'apple' ? summary.appleSongs : summary.youtubeSongs;
+            const playlist = service === 'apple' ? settings.applePlaylist : settings.youtubePlaylist;
             return (
               <Card key={service} title={SERVICE_NAMES[service]}>
                 <Badge tone={tone}>
                   {!credential ? 'Sin cargar' : tone === 'warn' ? `Token de ${age} días` : 'Cargada'}
                 </Badge>
-                <p className="mt-2 text-muted">{typeof songs === 'number' ? `${songs} canciones` : 'Sin datos todavía'}</p>
+                <p className="mt-2 break-words">{playlist ? playlist.name : <span className="text-muted">Sin playlist elegida</span>}</p>
+                <p className="text-muted">{typeof songs === 'number' ? `${songs} canciones` : 'Sin datos todavía'}</p>
               </Card>
             );
           })}

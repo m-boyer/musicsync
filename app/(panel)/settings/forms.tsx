@@ -25,7 +25,7 @@ export function SettingsForm({ values, fullAllowed }: { values: EditableSettings
 
   return (
     <form action={action} className="space-y-4">
-      <Field label="Modo" hint={fullAllowed ? undefined : 'El modo full se habilita cuando la prueba de agregar y borrar pase en ambos servicios.'}>
+      <Field label="Modo" hint={fullAllowed ? undefined : 'El modo full se habilita cuando la prueba de agregar y quitar pase en ambas playlists.'}>
         <select name="mode" value={mode} onChange={(event) => setMode(event.target.value)}>
           {Object.entries(MODE_LABELS).map(([value, label]) => (
             <option key={value} value={value} disabled={value === 'full' && !fullAllowed && values.mode !== 'full'}>
@@ -37,7 +37,7 @@ export function SettingsForm({ values, fullAllowed }: { values: EditableSettings
       {askConfirm ? (
         <label className="flex items-start gap-2">
           <input type="checkbox" name="confirmFull" className="mt-1 w-auto" />
-          <span>Entiendo que una canción que quite de un servicio se va a borrar también del otro.</span>
+          <span>Entiendo que una canción que quite de una playlist se va a quitar también de la otra.</span>
         </label>
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2">

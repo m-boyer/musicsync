@@ -14,13 +14,25 @@ export async function startProbe(runtime: Runtime, kind: ProbeKind, query: strin
     .exclusive(async () => {
       const [values, settings] = await Promise.all([runtime.credentials.values(), runtime.settings.get()]);
       const cookie = values.youtube;
+      const youtubePlaylist = settings.youtubePlaylist;
       const deps: ProbeDeps = {
         appleToken: values.apple,
+        applePlaylistId: settings.applePlaylist?.id,
         storefront: settings.appleStorefront,
+        preferredConnection: { baseUrl: settings.appleBaseUrl, header: settings.appleUserTokenHeader },
         createAppleClient,
-        youtube: cookie ? createYouTubeProvider(() => createYouTubeClient(cookie)) : undefined,
+        youtube:
+          cookie && youtubePlaylist
+            ? createYouTubeProvider(() => createYouTubeClient(cookie), youtubePlaylist.id)
+            : undefined,
+        youtubeMissing: cookie ? 'Falta elegir la playlist' : 'Falta cargar la cookie',
         report: (step) => runtime.probes.addStep(id, step),
-        markDeleteVerified: (service) => runtime.settings.markDeleteVerified(service, new Date()),
+        appleRemovalVerified: async ({ strategy, baseUrl, header }) => {
+          await runtime.settings.setAppleRemoveStrategy(strategy);
+          await runtime.settings.setAppleConnection(baseUrl, header);
+          await runtime.settings.markDeleteVerified('apple', new Date());
+        },
+        youtubeRemovalVerified: () => runtime.settings.markDeleteVerified('youtube', new Date()),
       };
       if (kind === 'write') await runWriteProbe(deps, query);
       else await runReadProbe(deps);
