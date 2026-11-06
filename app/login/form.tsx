@@ -31,7 +31,7 @@ export function LoginForm({ email }: { email: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4">
+    <form onSubmit={submit} method="post" className="space-y-4">
       <label className="block">
         <span className="mb-1 block text-sm">{t('login.email')}</span>
         <input name="email" type="email" defaultValue={email} autoComplete="username" required />
