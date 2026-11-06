@@ -1,6 +1,7 @@
 import { decryptSecret, encryptSecret } from '../crypto/secrets.js';
 import type { Queryable } from '../db/pool.js';
 import type { Service } from '../providers/types.js';
+import { LocalizedError } from '../i18n/index.js';
 
 export interface CredentialStatus {
   service: Service;
@@ -41,9 +42,7 @@ export class CredentialsRepo {
       try {
         values[row.service as Service] = decryptSecret(row.ciphertext, row.service, this.key);
       } catch {
-        throw new Error(
-          'Saved credentials cannot be decrypted. If APP_ENCRYPTION_KEY changed, save them again.',
-        );
+        throw new LocalizedError('errors.cannotDecrypt');
       }
     }
     return values;

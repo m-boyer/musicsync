@@ -2,14 +2,16 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useI18n } from './i18n';
 
-/** Shows a date in the viewer's own time zone. */
+/** Shows a date in the viewer's own time zone and language. */
 export function LocalTime({ value }: { value: Date | string | null | undefined }) {
+  const { locale, t } = useI18n();
   const [text, setText] = useState('');
   useEffect(() => {
-    if (value) setText(new Intl.DateTimeFormat('en', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)));
-  }, [value]);
-  if (!value) return <span>never</span>;
+    if (value) setText(new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)));
+  }, [value, locale]);
+  if (!value) return <span>{t('common.never')}</span>;
   return <time dateTime={new Date(value).toISOString()}>{text}</time>;
 }
 

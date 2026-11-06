@@ -1,10 +1,12 @@
 'use client';
 
 import { useActionState, useEffect, useRef } from 'react';
+import { useI18n } from '../../components/i18n';
 import { buttonClass, Notice } from '../../components/ui';
 import { saveCredential, type FormState } from '../actions';
 
 export function CredentialForm({ service, label }: { service: string; label: string }) {
+  const { t } = useI18n();
   const [state, action, pending] = useActionState<FormState, FormData>(saveCredential.bind(null, service), {});
   const form = useRef<HTMLFormElement>(null);
 
@@ -20,7 +22,7 @@ export function CredentialForm({ service, label }: { service: string; label: str
       </label>
       {state.message ? <Notice tone={state.ok ? 'ok' : 'bad'}>{state.message}</Notice> : null}
       <button className={buttonClass} disabled={pending}>
-        {pending ? 'Saving…' : 'Save'}
+        {pending ? t('common.saving') : t('common.save')}
       </button>
     </form>
   );

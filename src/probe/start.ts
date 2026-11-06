@@ -3,8 +3,9 @@ import { createAppleClient } from '../providers/apple.js';
 import { createYouTubeClient, createYouTubeProvider } from '../providers/youtube.js';
 import type { ProbeKind } from '../repos/probes.js';
 import type { Runtime } from '../runtime.js';
-import { safeError } from '../sync/cycle.js';
+import { errorMessage, safeError } from '../sync/cycle.js';
 import { runReadProbe, runWriteProbe, type ProbeDeps } from './run.js';
+import { message } from '../i18n/index.js';
 
 /** Runs in the background because a write test can take minutes. The page follows its steps. */
 export async function startProbe(runtime: Runtime, kind: ProbeKind, query: string): Promise<void> {
@@ -25,7 +26,7 @@ export async function startProbe(runtime: Runtime, kind: ProbeKind, query: strin
           cookie && youtubePlaylist
             ? createYouTubeProvider(() => createYouTubeClient(cookie), youtubePlaylist.id)
             : undefined,
-        youtubeMissing: cookie ? 'No playlist chosen' : 'Cookie not saved',
+        youtubeMissing: message(cookie ? 'probe.noPlaylist' : 'probe.noCookie'),
         report: (step) => runtime.probes.addStep(id, step),
         appleRemovalVerified: async ({ strategy, baseUrl, header }) => {
           await runtime.settings.setAppleRemoveStrategy(strategy);
@@ -40,7 +41,7 @@ export async function startProbe(runtime: Runtime, kind: ProbeKind, query: strin
     .catch(async (error: unknown) => {
       const safe = safeError(error);
       logger.error('Connection test failed', safe);
-      await runtime.probes.addStep(id, { name: 'Prueba', ok: false, detail: safe.message });
+      await runtime.probes.addStep(id, { name: message('probe.test'), ok: false, detail: errorMessage(error) });
     })
     .finally(async () => {
       // The Apple client shares one configuration, which the test changed.

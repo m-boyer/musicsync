@@ -8,6 +8,7 @@ import {
 } from '@syncfm/applemusic-api';
 import { lazy } from './lazy.js';
 import type { MusicProvider, PlaylistDirectory, PlaylistInfo, ReadResult, Track } from './types.js';
+import { LocalizedError } from '../i18n/index.js';
 
 const SEARCH_LIMIT = 5;
 
@@ -95,7 +96,7 @@ export function createAppleProvider(create: () => Promise<AppleMusic>, options: 
     },
 
     async remove(track: Track): Promise<void> {
-      if (!options.removeStrategy) throw new Error('Removing songs from Apple Music playlists is not verified');
+      if (!options.removeStrategy) throw new LocalizedError('errors.appleRemoveNotVerified');
       if (!track.removeId) throw new Error(`Song ${track.id} has no Apple library id`);
       await (await client()).Library.removeTracksFromPlaylist(options.playlistId, [track.removeId], options.removeStrategy);
     },

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { APPLE_HEADERS, APPLE_HOSTS, runReadProbe, runWriteProbe, type ProbeDeps } from '../src/probe/run.js';
 import type { ProbeStep } from '../src/repos/probes.js';
 import { fakeProvider } from './fakes.js';
+import { render } from '../src/i18n/index.js';
 
 const entry = { id: 'i.1', attributes: { playParams: { catalogId: 'c1' } } };
 const COMBINATIONS = APPLE_HOSTS.length * APPLE_HEADERS.length;
@@ -40,8 +41,13 @@ function setup(overrides: Partial<ProbeDeps> = {}, apple = appleFake()) {
     storefront: 'ar',
     createAppleClient: vi.fn(async () => apple.client),
     youtube: undefined,
+    // Steps are stored as message keys; the assertions read them in English.
     report: async (step) => {
-      steps.push(step);
+      steps.push({
+        ...step,
+        name: render('en', step.name),
+        ...(step.detail === undefined ? {} : { detail: render('en', step.detail) }),
+      });
     },
     appleRemovalVerified,
     youtubeRemovalVerified,
@@ -51,7 +57,7 @@ function setup(overrides: Partial<ProbeDeps> = {}, apple = appleFake()) {
   return { deps, steps, apple, appleRemovalVerified, youtubeRemovalVerified };
 }
 
-const named = (steps: ProbeStep[], text: string) => steps.filter((step) => step.name.includes(text));
+const named = (steps: ProbeStep[], text: string) => steps.filter((step) => (step.name as string).includes(text));
 
 describe('runReadProbe', () => {
   it('tries every Apple connection, tries the saved one first, and reads the playlist', async () => {
@@ -64,7 +70,7 @@ describe('runReadProbe', () => {
 
     expect(deps.createAppleClient).toHaveBeenCalledTimes(COMBINATIONS + 1);
     expect(steps[0]).toMatchObject({ ok: true, connection: { baseUrl: APPLE_HOSTS[1], header: APPLE_HEADERS[1] } });
-    expect(named(steps, 'read the chosen playlist')[0]).toMatchObject({ ok: true, detail: '1 songs' });
+    expect(named(steps, 'read the chosen playlist')[0]).toMatchObject({ ok: true, detail: '1 song' });
   });
 
   it('reports a failed connection without credentials', async () => {
@@ -107,7 +113,7 @@ describe('runReadProbe', () => {
     const youtube = fakeProvider('youtube', [{ id: 'y', title: 't', artist: 'a' }]);
     const { deps, steps } = setup({ appleToken: undefined, youtube: youtube.provider });
     await runReadProbe(deps);
-    expect(named(steps, 'YouTube')[0]).toMatchObject({ ok: true, detail: '1 songs' });
+    expect(named(steps, 'YouTube')[0]).toMatchObject({ ok: true, detail: '1 song' });
 
     youtube.read.mockRejectedValueOnce(new Error('expired'));
     await runReadProbe(deps);

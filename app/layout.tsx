@@ -1,17 +1,25 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { getI18n, getLocale } from '../src/i18n/server';
+import { I18nProvider } from './components/i18n';
 import './globals.css';
 
-export const metadata: Metadata = {
-  title: 'musicsync',
-  description: 'Keeps an Apple Music playlist and a YouTube Music playlist in sync',
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getI18n();
+  return {
+    title: 'musicsync',
+    description: t('meta.description'),
+    robots: { index: false, follow: false },
+  };
+}
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const locale = await getLocale();
   return (
-    <html lang="en">
-      <body className="min-h-dvh antialiased">{children}</body>
+    <html lang={locale}>
+      <body className="min-h-dvh antialiased">
+        <I18nProvider locale={locale}>{children}</I18nProvider>
+      </body>
     </html>
   );
 }

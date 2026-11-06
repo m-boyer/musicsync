@@ -17,6 +17,7 @@ It is a small self-hosted Next.js app with Postgres. It runs the sync every few 
 - **Built-in tests** that check what each service allows from your server before you turn on removals.
 - **Encrypted credentials:** tokens are stored encrypted in Postgres and never shown again.
 - **One account,** with sign-up disabled and rate-limited sign-in.
+- **English and Spanish,** picked from the browser or chosen in the panel. See [Translations](docs/translations.md) to add a language.
 
 ## Quick start
 
@@ -58,6 +59,7 @@ Everything else is set from the web panel.
 
 - [Setup guide](docs/setup.md): credentials, choosing playlists, the first sync and deployment.
 - [How it works](docs/how-it-works.md): the sync cycle, matching, modes and safety rules.
+- [Translations](docs/translations.md): how the language files work and how to add one.
 
 ## Development
 

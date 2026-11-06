@@ -3,9 +3,11 @@
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { authClient } from '../../src/auth/client';
+import { useI18n } from '../components/i18n';
 import { buttonClass, Notice } from '../components/ui';
 
 export function LoginForm({ email }: { email: string }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -21,11 +23,7 @@ export function LoginForm({ email }: { email: string }) {
     });
     setBusy(false);
     if (result.error) {
-      setError(
-        result.error.status === 429
-          ? 'Too many attempts. Wait a few minutes.'
-          : 'The email or password is incorrect.',
-      );
+      setError(result.error.status === 429 ? t('login.tooManyAttempts') : t('login.invalid'));
       return;
     }
     router.replace('/');
@@ -35,16 +33,16 @@ export function LoginForm({ email }: { email: string }) {
   return (
     <form onSubmit={submit} className="space-y-4">
       <label className="block">
-        <span className="mb-1 block text-sm">Email</span>
+        <span className="mb-1 block text-sm">{t('login.email')}</span>
         <input name="email" type="email" defaultValue={email} autoComplete="username" required />
       </label>
       <label className="block">
-        <span className="mb-1 block text-sm">Password</span>
+        <span className="mb-1 block text-sm">{t('login.password')}</span>
         <input name="password" type="password" autoComplete="current-password" autoFocus required />
       </label>
       {error ? <Notice tone="bad">{error}</Notice> : null}
       <button className={`${buttonClass} w-full`} disabled={busy}>
-        {busy ? 'Signing in…' : 'Sign in'}
+        {busy ? t('login.submitting') : t('login.submit')}
       </button>
     </form>
   );

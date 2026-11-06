@@ -1,6 +1,7 @@
 import { logger } from '../logger.js';
 import type { CycleDeps } from './cycle.js';
-import { safeError } from './cycle.js';
+import { errorMessage, safeError } from './cycle.js';
+import type { Message } from '../i18n/index.js';
 import { runAndRecord } from './loop.js';
 
 export type LoadedCycle =
@@ -10,7 +11,7 @@ export type LoadedCycle =
 export interface ControllerDeps {
   load(): Promise<LoadedCycle>;
   recordNotConfigured(run: { startedAt: Date; mode: string; missing: string[] }): Promise<void>;
-  recordFailure(run: { startedAt: Date; error: string }): Promise<void>;
+  recordFailure(run: { startedAt: Date; error: Message }): Promise<void>;
   fallbackIntervalMs?: number;
   now?: () => Date;
 }
@@ -76,7 +77,7 @@ export class SyncController {
         const safe = safeError(error);
         logger.error('Sync could not start', safe);
         // Recorded so the web shows it, not only the logs.
-        await this.deps.recordFailure({ startedAt, error: safe.message }).catch(() => undefined);
+        await this.deps.recordFailure({ startedAt, error: errorMessage(error) }).catch(() => undefined);
         return this.deps.fallbackIntervalMs ?? DEFAULT_FALLBACK_MS;
       })
       .then((intervalMs) => {

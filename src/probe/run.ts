@@ -4,7 +4,8 @@ import type { AppleOptions } from '../providers/apple.js';
 import type { MusicProvider } from '../providers/types.js';
 import type { ProbeStep } from '../repos/probes.js';
 import type { AppleUserTokenHeader } from '../repos/settings.js';
-import { safeError } from '../sync/cycle.js';
+import { errorMessage } from '../sync/cycle.js';
+import { message as m, type Message } from '../i18n/index.js';
 
 export const APPLE_HOSTS = ['https://amp-api.music.apple.com', 'https://amp-api-edge.music.apple.com'];
 export const APPLE_HEADERS: AppleUserTokenHeader[] = ['Music-User-Token', 'media-user-token'];
@@ -27,7 +28,7 @@ export interface ProbeDeps {
   createAppleClient(options: AppleOptions): Promise<AppleMusic>;
   /** Bound to the chosen YouTube playlist, or undefined when something is missing. */
   youtube: MusicProvider | undefined;
-  youtubeMissing?: string;
+  youtubeMissing?: Message;
   report(step: ProbeStep): Promise<void>;
   appleRemovalVerified?(removal: AppleRemoval): Promise<void>;
   youtubeRemovalVerified?(): Promise<void>;
@@ -46,6 +47,10 @@ async function waitFor(check: () => Promise<boolean>, waitMs: number): Promise<b
     await delay(waitMs);
   }
   return false;
+}
+
+function songCount(count: number, complete: boolean): Message {
+  return m(complete ? 'probe.readCount' : 'probe.readIncomplete', { count });
 }
 
 function hostOf(baseUrl: string): string {
@@ -72,14 +77,14 @@ function clientFor(deps: ProbeDeps, token: string, connection: Connection): Prom
 async function findAppleConnections(deps: ProbeDeps, token: string): Promise<Connection[]> {
   const working: Connection[] = [];
   for (const connection of orderedConnections(deps.preferredConnection)) {
-    const name = `Apple: connect with ${hostOf(connection.baseUrl)} and ${connection.header}`;
+    const name = m('probe.connect', { host: hostOf(connection.baseUrl), header: connection.header });
     try {
       const client = await clientFor(deps, token, connection);
       await client.Library.getSongs(1, 0);
       working.push(connection);
       await deps.report({ name, ok: true, connection });
     } catch (error) {
-      await deps.report({ name, ok: false, detail: safeError(error).message });
+      await deps.report({ name, ok: false, detail: errorMessage(error) });
     }
   }
   return working;
@@ -88,33 +93,25 @@ async function findAppleConnections(deps: ProbeDeps, token: string): Promise<Con
 async function readApplePlaylist(deps: ProbeDeps, token: string, connection: Connection, playlistId: string) {
   const client = await clientFor(deps, token, connection);
   const { items, complete } = await client.Library.getAllPlaylistTracks(playlistId);
-  await deps.report({
-    name: 'Apple: read the chosen playlist',
-    ok: complete,
-    detail: `${items.length} songs${complete ? '' : ', incomplete read'}`,
-  });
+  await deps.report({ name: m('probe.appleRead'), ok: complete, detail: songCount(items.length, complete) });
 }
 
 async function probeYouTubeRead(deps: ProbeDeps, youtube: MusicProvider): Promise<boolean> {
   try {
     const { tracks, complete } = await youtube.read();
-    await deps.report({
-      name: 'YouTube: read the chosen playlist',
-      ok: complete,
-      detail: `${tracks.length} songs${complete ? '' : ', incomplete read'}`,
-    });
+    await deps.report({ name: m('probe.youtubeRead'), ok: complete, detail: songCount(tracks.length, complete) });
     return complete;
   } catch (error) {
-    await deps.report({ name: 'YouTube: read the chosen playlist', ok: false, detail: safeError(error).message });
+    await deps.report({ name: m('probe.youtubeRead'), ok: false, detail: errorMessage(error) });
     return false;
   }
 }
 
-async function reportMissing(deps: ProbeDeps): Promise<{ apple?: string; youtube?: string }> {
-  const missing: { apple?: string; youtube?: string } = {};
-  if (!deps.appleToken) missing.apple = 'Token not saved';
-  else if (!deps.applePlaylistId) missing.apple = 'No playlist chosen';
-  if (!deps.youtube) missing.youtube = deps.youtubeMissing ?? 'Cookie not saved';
+async function reportMissing(deps: ProbeDeps): Promise<{ apple?: Message; youtube?: Message }> {
+  const missing: { apple?: Message; youtube?: Message } = {};
+  if (!deps.appleToken) missing.apple = m('probe.noToken');
+  else if (!deps.applePlaylistId) missing.apple = m('probe.noPlaylist');
+  if (!deps.youtube) missing.youtube = deps.youtubeMissing ?? m('probe.noCookie');
   if (missing.apple) await deps.report({ name: 'Apple', ok: false, detail: missing.apple });
   return missing;
 }
@@ -129,17 +126,17 @@ export async function runReadProbe(deps: ProbeDeps): Promise<void> {
       try {
         await readApplePlaylist(deps, token, first, deps.applePlaylistId);
       } catch (error) {
-        await deps.report({ name: 'Apple: read the chosen playlist', ok: false, detail: safeError(error).message });
+        await deps.report({ name: m('probe.appleRead'), ok: false, detail: errorMessage(error) });
       }
     } else if (!deps.applePlaylistId) {
-      await deps.report({ name: 'Apple: playlist', ok: false, detail: 'No playlist chosen' });
+      await deps.report({ name: m('probe.applePlaylist'), ok: false, detail: m('probe.noPlaylist') });
     }
   } else {
-    await deps.report({ name: 'Apple', ok: false, detail: 'Token not saved' });
+    await deps.report({ name: 'Apple', ok: false, detail: m('probe.noToken') });
   }
 
   if (deps.youtube) await probeYouTubeRead(deps, deps.youtube);
-  else await deps.report({ name: 'YouTube', ok: false, detail: deps.youtubeMissing ?? 'Cookie not saved' });
+  else await deps.report({ name: 'YouTube', ok: false, detail: deps.youtubeMissing ?? m('probe.noCookie') });
 }
 
 async function probeAppleWrite(deps: ProbeDeps, token: string, playlistId: string, query: string): Promise<void> {
@@ -151,7 +148,7 @@ async function probeAppleWrite(deps: ProbeDeps, token: string, playlistId: strin
   const { results } = await finder.Search.search({ term: query, types: [ResourceType.Songs], limit: 1 });
   const song = results.songs?.data?.[0] as { id: string; attributes?: { name?: string } } | undefined;
   if (!song) {
-    await deps.report({ name: 'Apple: find a test song', ok: false, detail: 'No results' });
+    await deps.report({ name: m('probe.appleFind'), ok: false, detail: m('probe.noResults') });
     return;
   }
   const label = song.attributes?.name ?? song.id;
@@ -163,19 +160,19 @@ async function probeAppleWrite(deps: ProbeDeps, token: string, playlistId: strin
 
   if (await findEntry(first)) {
     await deps.report({
-      name: 'Apple: test song',
+      name: m('probe.appleSong'),
       ok: false,
-      detail: 'It is already in the playlist, so it is left alone. Pick another one.',
+      detail: m('probe.alreadyThere'),
     });
     return;
   }
-  await deps.report({ name: 'Apple: test song', ok: true, detail: label });
+  await deps.report({ name: m('probe.appleSong'), ok: true, detail: label });
 
   try {
     await (await clientFor(deps, token, first)).Library.addTracksToPlaylist(playlistId, [song.id]);
-    await deps.report({ name: 'Apple: add to the playlist', ok: true });
+    await deps.report({ name: m('probe.appleAdd'), ok: true });
   } catch (error) {
-    await deps.report({ name: 'Apple: add to the playlist', ok: false, detail: safeError(error).message });
+    await deps.report({ name: m('probe.appleAdd'), ok: false, detail: errorMessage(error) });
     return;
   }
 
@@ -187,24 +184,24 @@ async function probeAppleWrite(deps: ProbeDeps, token: string, playlistId: strin
   }, waitMs);
   if (!entry) {
     await deps.report({
-      name: 'Apple: see the added song',
+      name: m('probe.appleSeen'),
       ok: false,
-      detail: `It did not show up in the playlist. If it shows up later, remove "${label}" by hand.`,
+      detail: m('probe.notShown', { song: label }),
     });
     return;
   }
 
   for (const connection of connections) {
     for (const strategy of PLAYLIST_REMOVE_STRATEGIES) {
-      const name = `Apple: remove (${strategy}) with ${hostOf(connection.baseUrl)} and ${connection.header}`;
+      const name = m('probe.appleRemoveWith', { strategy, host: hostOf(connection.baseUrl), header: connection.header });
       try {
         await (await clientFor(deps, token, connection)).Library.removeTracksFromPlaylist(playlistId, [entry.id], strategy);
       } catch (error) {
-        await deps.report({ name, ok: false, detail: safeError(error).message });
+        await deps.report({ name, ok: false, detail: errorMessage(error) });
         continue;
       }
       const gone = await waitFor(async () => (await findEntry(connection)) === undefined, waitMs);
-      await deps.report({ name, ok: gone, ...(gone ? {} : { detail: 'The request succeeded but the song is still in the playlist' }) });
+      await deps.report({ name, ok: gone, ...(gone ? {} : { detail: m('probe.stillThere') }) });
       if (gone) {
         await deps.appleRemovalVerified?.({ strategy, ...connection });
         return;
@@ -213,9 +210,9 @@ async function probeAppleWrite(deps: ProbeDeps, token: string, playlistId: strin
   }
 
   await deps.report({
-    name: 'Apple: remove',
+    name: m('probe.appleRemove'),
     ok: false,
-    detail: `No method could remove "${label}" from the playlist. Remove it by hand. Full mode stays blocked.`,
+    detail: m('probe.appleRemoveFailed', { song: label }),
   });
 }
 
@@ -224,37 +221,37 @@ async function probeYouTubeWrite(deps: ProbeDeps, youtube: MusicProvider, query:
 
   const [song] = await youtube.search({ id: '', title: query, artist: '' });
   if (!song) {
-    await deps.report({ name: 'YouTube: find a test song', ok: false, detail: 'No results' });
+    await deps.report({ name: m('probe.youtubeFind'), ok: false, detail: m('probe.noResults') });
     return;
   }
 
   const inPlaylist = async () => (await youtube.read()).tracks.some((track) => track.id === song.id);
   if (await inPlaylist()) {
     await deps.report({
-      name: 'YouTube: test song',
+      name: m('probe.youtubeSong'),
       ok: false,
-      detail: 'It is already in the playlist, so it is left alone. Pick another one.',
+      detail: m('probe.alreadyThere'),
     });
     return;
   }
-  await deps.report({ name: 'YouTube: test song', ok: true, detail: song.title });
+  await deps.report({ name: m('probe.youtubeSong'), ok: true, detail: song.title });
 
   const waitMs = deps.waitMs ?? POLL_INTERVAL_MS;
   await youtube.add(song);
   const added = await waitFor(inPlaylist, waitMs);
   await deps.report({
-    name: 'YouTube: add to the playlist',
+    name: m('probe.youtubeAdd'),
     ok: added,
-    ...(added ? {} : { detail: `It did not show up in the playlist. If it shows up later, remove "${song.title}" by hand.` }),
+    ...(added ? {} : { detail: m('probe.notShown', { song: song.title }) }),
   });
   if (!added) return;
 
   await youtube.remove(song);
   const gone = await waitFor(async () => !(await inPlaylist()), waitMs);
   await deps.report({
-    name: 'YouTube: remove from the playlist',
+    name: m('probe.youtubeRemove'),
     ok: gone,
-    ...(gone ? {} : { detail: `Still in the playlist: "${song.title}". Remove it by hand.` }),
+    ...(gone ? {} : { detail: m('probe.youtubeStillThere', { song: song.title }) }),
   });
   if (gone) await deps.youtubeRemovalVerified?.();
 }
@@ -268,7 +265,7 @@ export async function runWriteProbe(deps: ProbeDeps, query: string): Promise<voi
     try {
       await run();
     } catch (error) {
-      await deps.report({ name, ok: false, detail: safeError(error).message });
+      await deps.report({ name, ok: false, detail: errorMessage(error) });
     }
   };
 
@@ -283,6 +280,6 @@ export async function runWriteProbe(deps: ProbeDeps, query: string): Promise<voi
     const youtube = deps.youtube;
     await guarded('YouTube', () => probeYouTubeWrite(deps, youtube, query));
   } else {
-    await deps.report({ name: 'YouTube', ok: false, detail: missing.youtube ?? 'Cookie not saved' });
+    await deps.report({ name: 'YouTube', ok: false, detail: missing.youtube ?? m('probe.noCookie') });
   }
 }

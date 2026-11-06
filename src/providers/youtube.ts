@@ -1,6 +1,7 @@
 import { Innertube } from 'youtubei.js';
 import { lazy } from './lazy.js';
 import type { MusicProvider, PlaylistDirectory, PlaylistInfo, ReadResult, Track } from './types.js';
+import { LocalizedError } from '../i18n/index.js';
 
 const MAX_PAGES = 1000;
 const MAX_PLAYLIST_LIST_PAGES = 20;
@@ -93,7 +94,7 @@ export function signedInClient(create: () => Promise<YouTubeClient>): () => Prom
         () => true,
         () => false,
       ));
-    if (!signedIn) throw new Error('The YouTube session is not valid: save the cookie again');
+    if (!signedIn) throw new LocalizedError('errors.youtubeSessionInvalid');
     return created;
   });
 }
@@ -170,7 +171,7 @@ export function createYouTubeDirectory(create: () => Promise<YouTubeClient>): Pl
     },
     async create(name) {
       const { playlist_id: id } = await (await client()).playlist.create(name, [], 'PRIVATE');
-      if (!id) throw new Error('YouTube did not return the created playlist');
+      if (!id) throw new LocalizedError('errors.youtubeNoPlaylist');
       return { id, name };
     },
     async isEditable(id) {

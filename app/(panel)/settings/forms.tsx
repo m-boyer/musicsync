@@ -6,7 +6,8 @@ import { authClient } from '../../../src/auth/client';
 import type { EditableSettings } from '../../../src/repos/settings';
 import { buttonClass, Notice } from '../../components/ui';
 import { saveSettings, type FormState } from '../actions';
-import { MODE_LABELS } from '../labels';
+import { useI18n } from '../../components/i18n';
+import { MODES } from '../labels';
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -19,17 +20,18 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 export function SettingsForm({ values, fullAllowed }: { values: EditableSettings; fullAllowed: boolean }) {
+  const { t } = useI18n();
   const [state, action, pending] = useActionState<FormState, FormData>(saveSettings, {});
   const [mode, setMode] = useState<string>(values.mode);
   const askConfirm = mode === 'full' && values.mode !== 'full';
 
   return (
     <form action={action} className="space-y-4">
-      <Field label="Mode" hint={fullAllowed ? undefined : 'Full mode is enabled once the add and remove test passes on both playlists.'}>
+      <Field label={t('settings.mode')} hint={fullAllowed ? undefined : t('settings.fullLocked')}>
         <select name="mode" value={mode} onChange={(event) => setMode(event.target.value)}>
-          {Object.entries(MODE_LABELS).map(([value, label]) => (
+          {MODES.map((value) => (
             <option key={value} value={value} disabled={value === 'full' && !fullAllowed && values.mode !== 'full'}>
-              {label}
+              {t(`modes.${value}`)}
             </option>
           ))}
         </select>
@@ -37,24 +39,25 @@ export function SettingsForm({ values, fullAllowed }: { values: EditableSettings
       {askConfirm ? (
         <label className="flex items-start gap-2">
           <input type="checkbox" name="confirmFull" className="mt-1 w-auto" />
-          <span>I understand that a song removed from one playlist will also be removed from the other.</span>
+          <span>{t('settings.confirmFull')}</span>
         </label>
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Interval (seconds)"><input name="intervalSeconds" type="number" min={60} max={86400} defaultValue={values.intervalSeconds} required /></Field>
-        <Field label="Apple Music country" hint="Two letters, for example us or ar."><input name="appleStorefront" maxLength={2} defaultValue={values.appleStorefront} required /></Field>
-        <Field label="Operations per cycle"><input name="maxOpsPerCycle" type="number" min={1} max={500} defaultValue={values.maxOpsPerCycle} required /></Field>
-        <Field label="Max removals per cycle" hint="If exceeded, nothing is removed."><input name="maxDeletesPerCycle" type="number" min={0} max={100} defaultValue={values.maxDeletesPerCycle} required /></Field>
-        <Field label="Wait after adding (minutes)"><input name="addGraceMinutes" type="number" min={1} max={1440} defaultValue={values.addGraceMinutes} required /></Field>
-        <Field label="Match threshold" hint="Between 0.5 and 1."><input name="matchThreshold" type="number" min={0.5} max={1} step={0.01} defaultValue={values.matchThreshold} required /></Field>
+        <Field label={t('settings.interval')}><input name="intervalSeconds" type="number" min={60} max={86400} defaultValue={values.intervalSeconds} required /></Field>
+        <Field label={t('settings.storefront')} hint={t('settings.storefrontHint')}><input name="appleStorefront" maxLength={2} defaultValue={values.appleStorefront} required /></Field>
+        <Field label={t('settings.maxOps')}><input name="maxOpsPerCycle" type="number" min={1} max={500} defaultValue={values.maxOpsPerCycle} required /></Field>
+        <Field label={t('settings.maxDeletes')} hint={t('settings.maxDeletesHint')}><input name="maxDeletesPerCycle" type="number" min={0} max={100} defaultValue={values.maxDeletesPerCycle} required /></Field>
+        <Field label={t('settings.grace')}><input name="addGraceMinutes" type="number" min={1} max={1440} defaultValue={values.addGraceMinutes} required /></Field>
+        <Field label={t('settings.threshold')} hint={t('settings.thresholdHint')}><input name="matchThreshold" type="number" min={0.5} max={1} step={0.01} defaultValue={values.matchThreshold} required /></Field>
       </div>
       {state.message ? <Notice tone={state.ok ? 'ok' : 'bad'}>{state.message}</Notice> : null}
-      <button className={buttonClass} disabled={pending}>{pending ? 'Saving…' : 'Save'}</button>
+      <button className={buttonClass} disabled={pending}>{pending ? t('common.saving') : t('common.save')}</button>
     </form>
   );
 }
 
 export function PasswordForm() {
+  const { t } = useI18n();
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -67,19 +70,19 @@ export function PasswordForm() {
       revokeOtherSessions: true,
     });
     if (result.error) {
-      setMessage({ ok: false, text: result.error.status === 429 ? 'Too many attempts. Wait a few minutes.' : 'The password could not be changed. Check the current password.' });
+      setMessage({ ok: false, text: result.error.status === 429 ? t('login.tooManyAttempts') : t('settings.passwordFailed') });
       return;
     }
     form.reset();
-    setMessage({ ok: true, text: 'Password updated.' });
+    setMessage({ ok: true, text: t('settings.passwordUpdated') });
   }
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <Field label="Current password"><input name="current" type="password" autoComplete="current-password" required /></Field>
-      <Field label="New password" hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}><input name="next" type="password" autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} required /></Field>
+      <Field label={t('settings.currentPassword')}><input name="current" type="password" autoComplete="current-password" required /></Field>
+      <Field label={t('settings.newPassword')} hint={t('settings.passwordHint', { min: MIN_PASSWORD_LENGTH })}><input name="next" type="password" autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} required /></Field>
       {message ? <Notice tone={message.ok ? 'ok' : 'bad'}>{message.text}</Notice> : null}
-      <button className={buttonClass}>Change password</button>
+      <button className={buttonClass}>{t('settings.changePassword')}</button>
     </form>
   );
 }

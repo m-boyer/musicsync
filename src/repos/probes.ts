@@ -1,11 +1,12 @@
 import type { Queryable } from '../db/pool.js';
+import type { Message } from '../i18n/index.js';
 
 export type ProbeKind = 'read' | 'write';
 
 export interface ProbeStep {
-  name: string;
+  name: Message;
   ok: boolean;
-  detail?: string;
+  detail?: Message;
   /** Present on a successful Apple read: the combination can be saved from the web. */
   connection?: { baseUrl: string; header: 'Music-User-Token' | 'media-user-token' };
 }

@@ -2,17 +2,19 @@ import { requireSession } from '../../../src/auth/guard';
 import { canUseFullMode } from '../../../src/repos/settings';
 import { getRuntime } from '../../../src/runtime';
 import { Card, PageTitle } from '../../components/ui';
+import { getI18n } from '../../../src/i18n/server';
 import { PasswordForm, SettingsForm } from './forms';
 
 export default async function SettingsPage() {
   await requireSession();
+  const { t } = await getI18n();
   const settings = await getRuntime().settings.get();
 
   return (
     <>
-      <PageTitle title="Settings" />
+      <PageTitle title={t('settings.title')} />
       <div className="space-y-4">
-        <Card title="Sync">
+        <Card title={t('settings.sync')}>
           <SettingsForm
             fullAllowed={canUseFullMode(settings)}
             values={{
@@ -26,12 +28,15 @@ export default async function SettingsPage() {
             }}
           />
         </Card>
-        <Card title="Apple Music connection">
+        <Card title={t('settings.appleConnection')}>
           <p className="text-muted break-words">
-            {settings.appleBaseUrl ?? 'Default host'} with {settings.appleUserTokenHeader}. Change it from Tests.
+            {t('settings.appleConnectionText', {
+              host: settings.appleBaseUrl ?? t('settings.defaultHost'),
+              header: settings.appleUserTokenHeader,
+            })}
           </p>
         </Card>
-        <Card title="Change password">
+        <Card title={t('settings.changePassword')}>
           <PasswordForm />
         </Card>
       </div>

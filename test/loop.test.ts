@@ -54,7 +54,16 @@ describe('runAndRecord', () => {
     const logged = vi.mocked(console.error).mock.calls.flat().join(' ');
     expect(logged).toContain('HTTP 401');
     expect(logged).not.toContain('secret-token');
-    expect(d.repo.runs).toMatchObject([{ status: 'failed', summary: { error: 'Apple Music: Request failed (HTTP 401)' } }]);
+    // Saved as a message key, so it is shown in the viewer's language.
+    expect(d.repo.runs).toMatchObject([
+      {
+        status: 'failed',
+        summary: {
+          error: { key: 'errors.serviceRead', params: { service: 'Apple Music', error: 'Request failed (HTTP 401)' } },
+        },
+      },
+    ]);
+    expect(JSON.stringify(d.repo.runs)).not.toContain('secret-token');
   });
 
   it('survives being unable to record the failure', async () => {

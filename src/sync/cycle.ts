@@ -5,6 +5,7 @@ import type { MatchResult, StateRepo } from '../repos/state.js';
 import { deleteDecision, readBlockReason } from './guards.js';
 import { bestMatch, pairLocally, scoreTracks } from './matcher.js';
 import { reconcile, type Link } from './reconcile.js';
+import { LocalizedError, type Message } from '../i18n/index.js';
 
 const SAMPLE_SIZE = 50;
 
@@ -84,9 +85,15 @@ function emptySummary(): CycleSummary {
  * account credentials in its headers, so the original must never reach the logs or Sentry.
  */
 export function safeError(error: unknown): Error {
+  if (error instanceof LocalizedError) return error;
   const message = error instanceof Error ? error.message : String(error);
   const status = (error as { response?: { status?: unknown } } | null)?.response?.status;
   return new Error(typeof status === 'number' ? `${message} (HTTP ${status})` : message);
+}
+
+/** What is saved and shown for an error: a translatable message when the app raised it. */
+export function errorMessage(error: unknown): Message {
+  return error instanceof LocalizedError ? error.toMessage() : safeError(error).message;
 }
 
 function matchKey(service: Service, id: string): string {
@@ -118,7 +125,10 @@ export async function runCycle(deps: CycleDeps): Promise<CycleResult> {
 
   const read = (provider: MusicProvider) =>
     provider.read().catch((error: unknown) => {
-      throw new Error(`${provider.service === 'apple' ? 'Apple Music' : 'YouTube Music'}: ${safeError(error).message}`);
+      throw new LocalizedError('errors.serviceRead', {
+        service: provider.service === 'apple' ? 'Apple Music' : 'YouTube Music',
+        error: errorMessage(error),
+      });
     });
   const [appleRead, youtubeRead] = await Promise.all([read(apple), read(youtube)]);
   const links = await repo.getLinks();
