@@ -30,7 +30,7 @@ concurrency:
 jobs:
   publish:
     name: Test and publish production image
-    uses: m-boyer/Pipelines/.github/workflows/ghcr-coolify-deploy.yml@v1
+    uses: ./.github/workflows/ghcr-coolify-deploy.yml
     with:
       environment: prod
       operation: ${{ inputs.operation }}
@@ -48,8 +48,13 @@ jobs:
     environment:
       name: prod
     steps:
+      - name: Checkout deploy action
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          sparse-checkout: .github/actions
+
       - name: Trigger Coolify and verify health
-        uses: m-boyer/Pipelines/actions/coolify-deploy@v1
+        uses: ./.github/actions/coolify-deploy
         with:
           token: ${{ secrets.COOLIFY_TOKEN }}
           webhook: ${{ secrets.COOLIFY_WEBHOOK }}

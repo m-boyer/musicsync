@@ -1,0 +1,275 @@
+# Copia de m-boyer/Pipelines@v1 (19c9e6b). musicsync es público y Pipelines privado, así que no se puede usar el original.
+name: GHCR publication for Coolify
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub environment that owns the Coolify configuration
+        required: false
+        default: prod
+        type: string
+      operation:
+        description: Deploy a new image or promote an existing immutable image
+        required: false
+        default: deploy
+        type: string
+      target_sha:
+        description: Full 40-character commit SHA required for rollback
+        required: false
+        default: ""
+        type: string
+      image:
+        description: GHCR image name; defaults to ghcr.io/<caller-owner>/<caller-repo>
+        required: false
+        default: ""
+        type: string
+      platform:
+        description: Docker target platform
+        required: false
+        default: linux/amd64
+        type: string
+      dockerfile:
+        description: Dockerfile path relative to the caller repository
+        required: false
+        default: ./Dockerfile
+        type: string
+      context:
+        description: Docker build context relative to the caller repository
+        required: false
+        default: .
+        type: string
+      node_version:
+        description: Optional Node.js version used by validation commands
+        required: false
+        default: ""
+        type: string
+      node_cache:
+        description: Optional setup-node cache, such as npm
+        required: false
+        default: ""
+        type: string
+      install_command:
+        description: Optional dependency installation command
+        required: false
+        default: ""
+        type: string
+      test_command:
+        description: Optional test command
+        required: false
+        default: ""
+        type: string
+      build_command:
+        description: Optional build verification command
+        required: false
+        default: ""
+        type: string
+      publish_image:
+        description: Publish immutable and environment tags to GHCR
+        required: false
+        default: true
+        type: boolean
+    outputs:
+      revision:
+        description: Application revision built or promoted
+        value: ${{ jobs.release.outputs.revision }}
+      image:
+        description: Normalized GHCR image name
+        value: ${{ jobs.release.outputs.image }}
+      digest:
+        description: Published or promoted image digest
+        value: ${{ jobs.release.outputs.digest }}
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.repository }}-${{ inputs.environment }}-ghcr-coolify
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish ${{ inputs.environment }} image
+    runs-on: ubuntu-latest
+    outputs:
+      revision: ${{ steps.release.outputs.revision }}
+      image: ${{ steps.release.outputs.image }}
+      digest: ${{ steps.result.outputs.digest }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Resolve and validate release inputs
+        id: release
+        env:
+          ENVIRONMENT_NAME: ${{ inputs.environment }}
+          IMAGE_INPUT: ${{ inputs.image }}
+          OPERATION: ${{ inputs.operation }}
+          PLATFORM: ${{ inputs.platform }}
+          PUBLISH_IMAGE: ${{ inputs.publish_image }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+
+          operation="$(printf '%s' "${OPERATION:-deploy}" | tr '[:upper:]' '[:lower:]')"
+          case "$operation" in
+            deploy)
+              revision="$(printf '%s' "$GITHUB_SHA" | tr '[:upper:]' '[:lower:]')"
+              ;;
+            rollback)
+              if [[ ! "$TARGET_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+                echo "target_sha must be a full 40-character hexadecimal commit SHA" >&2
+                exit 1
+              fi
+              if [[ "$PUBLISH_IMAGE" != "true" ]]; then
+                echo "publish_image must be true for rollback" >&2
+                exit 1
+              fi
+              revision="$(printf '%s' "$TARGET_SHA" | tr '[:upper:]' '[:lower:]')"
+              ;;
+            *)
+              echo "operation must be deploy or rollback" >&2
+              exit 1
+              ;;
+          esac
+
+          test -n "$PLATFORM"
+          if [[ ! "$ENVIRONMENT_NAME" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "environment must also be a valid Docker tag" >&2
+            exit 1
+          fi
+          raw_image="${IMAGE_INPUT:-ghcr.io/$GITHUB_REPOSITORY}"
+          image="$(printf '%s' "$raw_image" | tr '[:upper:]' '[:lower:]')"
+          if [[ ! "$image" =~ ^ghcr\.io/[a-z0-9][a-z0-9._/-]*$ ]]; then
+            echo "image must be a valid ghcr.io image name" >&2
+            exit 1
+          fi
+
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "mode=$operation" >> "$GITHUB_OUTPUT"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout caller repository
+        if: steps.release.outputs.mode == 'deploy'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Node.js
+        if: steps.release.outputs.mode == 'deploy' && inputs.node_version != ''
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: ${{ inputs.node_cache }}
+
+      - name: Install dependencies
+        if: steps.release.outputs.mode == 'deploy' && inputs.install_command != ''
+        env:
+          PIPELINE_COMMAND: ${{ inputs.install_command }}
+        run: bash -euo pipefail -c "$PIPELINE_COMMAND"
+
+      - name: Run tests
+        if: steps.release.outputs.mode == 'deploy' && inputs.test_command != ''
+        env:
+          PIPELINE_COMMAND: ${{ inputs.test_command }}
+        run: bash -euo pipefail -c "$PIPELINE_COMMAND"
+
+      - name: Verify application build
+        if: steps.release.outputs.mode == 'deploy' && inputs.build_command != ''
+        env:
+          PIPELINE_COMMAND: ${{ inputs.build_command }}
+        run: bash -euo pipefail -c "$PIPELINE_COMMAND"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+
+      - name: Authenticate to GHCR
+        if: inputs.publish_image || steps.release.outputs.mode == 'rollback'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish image
+        if: steps.release.outputs.mode == 'deploy'
+        id: publish
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          platforms: ${{ inputs.platform }}
+          pull: true
+          push: ${{ inputs.publish_image }}
+          build-args: |
+            APP_REVISION=${{ steps.release.outputs.revision }}
+          tags: |
+            ${{ steps.release.outputs.image }}:sha-${{ steps.release.outputs.revision }}
+            ${{ steps.release.outputs.image }}:${{ inputs.environment }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.release.outputs.revision }}
+          provenance: mode=max
+
+      - name: Verify published tags
+        if: steps.release.outputs.mode == 'deploy' && inputs.publish_image
+        env:
+          EXPECTED_DIGEST: ${{ steps.publish.outputs.digest }}
+          IMAGE: ${{ steps.release.outputs.image }}
+          REVISION: ${{ steps.release.outputs.revision }}
+          TARGET_TAG: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+
+          digest_for() {
+            docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' \
+              | jq -er '.digest'
+          }
+
+          sha_digest="$(digest_for "$IMAGE:sha-$REVISION")"
+          target_digest="$(digest_for "$IMAGE:$TARGET_TAG")"
+          test "$sha_digest" = "$EXPECTED_DIGEST"
+          test "$target_digest" = "$EXPECTED_DIGEST"
+
+      - name: Promote rollback image
+        if: steps.release.outputs.mode == 'rollback'
+        id: rollback
+        env:
+          IMAGE: ${{ steps.release.outputs.image }}
+          REVISION: ${{ steps.release.outputs.revision }}
+          TARGET_TAG: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+
+          digest_for() {
+            docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' \
+              | jq -er '.digest'
+          }
+
+          source_digest="$(digest_for "$IMAGE:sha-$REVISION")"
+          docker buildx imagetools create \
+            --prefer-index=false \
+            --tag "$IMAGE:$TARGET_TAG" \
+            "$IMAGE:sha-$REVISION"
+          target_digest="$(digest_for "$IMAGE:$TARGET_TAG")"
+          test "$target_digest" = "$source_digest"
+          echo "digest=$source_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve result
+        id: result
+        env:
+          MODE: ${{ steps.release.outputs.mode }}
+          PUBLISH_DIGEST: ${{ steps.publish.outputs.digest }}
+          PUBLISH_IMAGE: ${{ inputs.publish_image }}
+          ROLLBACK_DIGEST: ${{ steps.rollback.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$MODE" == "rollback" ]]; then
+            digest="$ROLLBACK_DIGEST"
+          elif [[ "$PUBLISH_IMAGE" == "true" ]]; then
+            digest="$PUBLISH_DIGEST"
+          else
+            digest="not-published"
+          fi
+          test -n "$digest"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"

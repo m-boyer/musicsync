@@ -1,0 +1,170 @@
+# Copia de m-boyer/Pipelines@v1 (19c9e6b). musicsync es público y Pipelines privado, así que no se puede usar el original.
+name: Deploy a GHCR image with Coolify
+description: Trigger an authenticated Coolify deployment and verify application health
+
+inputs:
+  token:
+    description: Coolify token limited to deployment
+    required: true
+  webhook:
+    description: HTTPS Coolify deployment webhook
+    required: true
+  enabled:
+    description: Whether deployment is enabled
+    required: false
+    default: "false"
+  health_url:
+    description: Public HTTPS health endpoint
+    required: true
+  health_mode:
+    description: Health contract, either http or revision-json
+    required: false
+    default: http
+  expected_revision:
+    description: Revision expected from revision-json health checks
+    required: false
+    default: ""
+  timeout_seconds:
+    description: Maximum health wait in seconds
+    required: false
+    default: "600"
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve deployment gate
+      id: gate
+      shell: bash
+      env:
+        DEPLOY_ENABLED: ${{ inputs.enabled }}
+      run: |
+        set -euo pipefail
+
+        enabled="$(printf '%s' "$DEPLOY_ENABLED" | tr '[:upper:]' '[:lower:]')"
+        if [[ "$enabled" == "true" ]]; then
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::Coolify deployment is disabled for this run."
+        fi
+
+    - name: Trigger Coolify deployment
+      if: steps.gate.outputs.enabled == 'true'
+      shell: bash
+      env:
+        COOLIFY_TOKEN: ${{ inputs.token }}
+        COOLIFY_WEBHOOK: ${{ inputs.webhook }}
+      run: |
+        set -euo pipefail
+
+        test -n "$COOLIFY_TOKEN"
+        test -n "$COOLIFY_WEBHOOK"
+
+        node --input-type=module <<'NODE'
+        const token = (process.env.COOLIFY_TOKEN ?? '').trim();
+        const webhook = (process.env.COOLIFY_WEBHOOK ?? '').trim();
+
+        if (!token || !webhook) {
+          throw new Error('Coolify deployment credentials are empty.');
+        }
+        if (/[\r\n]/.test(token) || /[\r\n]/.test(webhook)) {
+          throw new Error('Coolify deployment credentials contain invalid line breaks.');
+        }
+
+        let url;
+        try {
+          url = new URL(webhook);
+        } catch {
+          throw new Error('Coolify webhook URL is invalid.');
+        }
+        if (url.protocol !== 'https:') {
+          throw new Error('Coolify webhook URL must use HTTPS.');
+        }
+        if (url.username || url.password) {
+          throw new Error('Coolify webhook URL must not include user information.');
+        }
+
+        let response;
+        try {
+          response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            redirect: 'manual',
+            signal: AbortSignal.timeout(20_000),
+          });
+        } catch {
+          throw new Error('Coolify webhook failed before receiving an HTTP response.');
+        }
+
+        await response.body?.cancel();
+        if (!response.ok) {
+          throw new Error(`Coolify webhook returned HTTP ${response.status}.`);
+        }
+        console.log(`Coolify accepted the deployment request (HTTP ${response.status}).`);
+        NODE
+
+    - name: Wait for deployed revision
+      if: steps.gate.outputs.enabled == 'true'
+      shell: bash
+      env:
+        EXPECTED_REVISION: ${{ inputs.expected_revision }}
+        HEALTH_MODE: ${{ inputs.health_mode }}
+        HEALTH_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
+        HEALTH_URL: ${{ inputs.health_url }}
+      run: |
+        set -euo pipefail
+
+        case "$HEALTH_MODE" in
+          http) ;;
+          revision-json)
+            test -n "$EXPECTED_REVISION"
+            ;;
+          *)
+            echo "health_mode must be http or revision-json" >&2
+            exit 1
+            ;;
+        esac
+        if [[ ! "$HEALTH_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || (( HEALTH_TIMEOUT_SECONDS < 10 )); then
+          echo "timeout_seconds must be an integer of at least 10" >&2
+          exit 1
+        fi
+
+        test -n "$HEALTH_URL"
+        python3 - "$HEALTH_URL" <<'PY'
+        import sys
+        import urllib.parse
+
+        parsed = urllib.parse.urlsplit(sys.argv[1])
+        if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
+            raise SystemExit("health_url must be a valid HTTPS URL without user information.")
+        PY
+
+        attempts=$(( (HEALTH_TIMEOUT_SECONDS + 9) / 10 ))
+        for attempt in $(seq 1 "$attempts"); do
+          if response="$(curl \
+            --fail \
+            --location \
+            --proto '=https' \
+            --proto-redir '=https' \
+            --silent \
+            --show-error \
+            --max-time 10 \
+            --header 'Cache-Control: no-cache' \
+            "$HEALTH_URL" 2>/dev/null)"; then
+            if [[ "$HEALTH_MODE" == "http" ]] || jq -e --arg revision "$EXPECTED_REVISION" \
+              '.status == "ok" and .revision == $revision' \
+              >/dev/null <<< "$response"; then
+              echo "Revision $EXPECTED_REVISION is healthy."
+              exit 0
+            fi
+          fi
+
+          echo "Waiting for revision $EXPECTED_REVISION ($attempt/$attempts)..."
+          sleep 10
+        done
+
+        echo "Revision $EXPECTED_REVISION did not become healthy within ${HEALTH_TIMEOUT_SECONDS}s." >&2
+        exit 1
