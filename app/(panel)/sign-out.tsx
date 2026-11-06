@@ -14,7 +14,7 @@ export function SignOut() {
         router.refresh();
       }}
     >
-      Salir
+      Sign out
     </button>
   );
 }

@@ -3,17 +3,17 @@ import type { Tone } from '../components/ui';
 export const SERVICE_NAMES = { apple: 'Apple Music', youtube: 'YouTube Music' } as const;
 
 export const MODE_LABELS = {
-  'dry-run': 'Simulación (dry-run)',
-  'add-only': 'Solo agregar (add-only)',
-  full: 'Agregar y borrar (full)',
+  'dry-run': 'Simulate (dry-run)',
+  'add-only': 'Add only (add-only)',
+  full: 'Add and remove (full)',
 } as const;
 
 const RUN_STATUS: Record<string, { label: string; tone: Tone }> = {
-  ok: { label: 'Correcto', tone: 'ok' },
-  partial: { label: 'Con errores', tone: 'warn' },
-  blocked: { label: 'Bloqueado', tone: 'warn' },
-  failed: { label: 'Falló', tone: 'bad' },
-  not_configured: { label: 'Sin configurar', tone: 'neutral' },
+  ok: { label: 'OK', tone: 'ok' },
+  partial: { label: 'With errors', tone: 'warn' },
+  blocked: { label: 'Blocked', tone: 'warn' },
+  failed: { label: 'Failed', tone: 'bad' },
+  not_configured: { label: 'Not configured', tone: 'neutral' },
 };
 
 export function runStatus(status: string): { label: string; tone: Tone } {

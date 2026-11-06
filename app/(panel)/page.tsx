@@ -24,41 +24,41 @@ export default async function HomePage() {
   return (
     <>
       <AutoRefresh active={state.running} />
-      <PageTitle title="Inicio" description="Sincroniza una playlist de Apple Music con una de YouTube Music." />
+      <PageTitle title="Home" description="Keeps an Apple Music playlist and a YouTube Music playlist in sync." />
       <div className="space-y-4">
         {credentials.length < 2 ? (
           <Notice tone="warn">
-            Faltan credenciales. <Link className="underline" href="/credentials">Cargalas acá</Link>.
+            Credentials are missing. <Link className="underline" href="/credentials">Add them here</Link>.
           </Notice>
         ) : !settings.applePlaylist || !settings.youtubePlaylist ? (
           <Notice tone="warn">
-            Falta elegir las playlists. <Link className="underline" href="/playlists">Elegilas acá</Link>.
+            No playlists chosen yet. <Link className="underline" href="/playlists">Choose them here</Link>.
           </Notice>
         ) : null}
 
         <Card
-          title="Sincronización"
+          title="Sync"
           footer={
             <form action={runNow}>
               <button
                 className={buttonClass}
                 disabled={state.running || credentials.length < 2 || !settings.applePlaylist || !settings.youtubePlaylist}
               >
-                {state.running ? 'Sincronizando…' : 'Sincronizar ahora'}
+                {state.running ? 'Syncing…' : 'Sync now'}
               </button>
             </form>
           }
         >
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-            <dt className="text-muted">Modo</dt>
+            <dt className="text-muted">Mode</dt>
             <dd>{MODE_LABELS[settings.mode]}</dd>
-            <dt className="text-muted">Último ciclo</dt>
+            <dt className="text-muted">Last cycle</dt>
             <dd className="flex flex-wrap items-center gap-2">
               <LocalTime value={last?.startedAt} />
               {lastStatus ? <Badge tone={lastStatus.tone}>{lastStatus.label}</Badge> : null}
             </dd>
-            <dt className="text-muted">Próximo ciclo</dt>
-            <dd>{state.running ? 'en curso' : <LocalTime value={state.nextRunAt} />}</dd>
+            <dt className="text-muted">Next cycle</dt>
+            <dd>{state.running ? 'running' : <LocalTime value={state.nextRunAt} />}</dd>
             {typeof summary.error === 'string' ? (
               <>
                 <dt className="text-muted">Error</dt>
@@ -78,19 +78,19 @@ export default async function HomePage() {
             return (
               <Card key={service} title={SERVICE_NAMES[service]}>
                 <Badge tone={tone}>
-                  {!credential ? 'Sin cargar' : tone === 'warn' ? `Token de ${age} días` : 'Cargada'}
+                  {!credential ? 'Not saved' : tone === 'warn' ? `Token is ${age} days old` : 'Saved'}
                 </Badge>
-                <p className="mt-2 break-words">{playlist ? playlist.name : <span className="text-muted">Sin playlist elegida</span>}</p>
-                <p className="text-muted">{typeof songs === 'number' ? `${songs} canciones` : 'Sin datos todavía'}</p>
+                <p className="mt-2 break-words">{playlist ? playlist.name : <span className="text-muted">No playlist chosen</span>}</p>
+                <p className="text-muted">{typeof songs === 'number' ? `${songs} songs` : 'No data yet'}</p>
               </Card>
             );
           })}
         </div>
 
-        <Card title="Pendientes">
+        <Card title="Pending">
           <p>
-            {pending === 0 ? 'No hay canciones pendientes.' : `${pending} canciones sin coincidencia. `}
-            {pending > 0 ? <Link className="underline" href="/pending">Revisarlas</Link> : null}
+            {pending === 0 ? 'No pending songs.' : `${pending} songs without a match. `}
+            {pending > 0 ? <Link className="underline" href="/pending">Review them</Link> : null}
           </p>
         </Card>
       </div>

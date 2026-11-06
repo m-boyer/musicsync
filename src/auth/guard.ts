@@ -4,8 +4,9 @@ import { getRuntime } from '../runtime.js';
 import { isAdmin } from './account.js';
 
 export async function getAdminSession() {
-  const session = await getRuntime().auth.api.getSession({ headers: await headers() });
-  return session && isAdmin(session.user.email) ? session : null;
+  const runtime = getRuntime();
+  const session = await runtime.auth.api.getSession({ headers: await headers() });
+  return session && isAdmin(session.user.email, runtime.config.ADMIN_EMAIL) ? session : null;
 }
 
 /** Every panel page and server action starts with this. Layouts alone do not protect them. */

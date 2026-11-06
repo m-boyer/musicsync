@@ -10,24 +10,24 @@ export function TestForms({ disabled }: { disabled: boolean }) {
 
   return (
     <>
-      <Card title="Probar lectura">
-        <p className="mb-3 text-muted">Solo lee. Muestra qué conexión funciona en Apple Music y lee las dos playlists elegidas.</p>
+      <Card title="Read test">
+        <p className="mb-3 text-muted">Read only. Shows which connection works on Apple Music and reads both chosen playlists.</p>
         <form action={readAction}>
           {readState.message ? <div className="mb-3"><Notice tone="bad">{readState.message}</Notice></div> : null}
-          <button className={buttonClass} disabled={disabled || readPending}>Probar lectura</button>
+          <button className={buttonClass} disabled={disabled || readPending}>Run read test</button>
         </form>
       </Card>
-      <Card title="Probar agregar y borrar">
+      <Card title="Add and remove test">
         <p className="mb-3 text-muted">
-          Agrega y quita una canción en cada playlist elegida, y puede tardar unos minutos. No toca ninguna que ya esté en ellas, así que elegí una que no esté en ninguna de las dos.
+          Adds and removes one song on each chosen playlist, and can take a few minutes. It never touches a song already in them, so pick one that is in neither.
         </p>
         <form action={writeAction} className="space-y-3">
           <label className="block">
-            <span className="mb-1 block text-sm">Canción y artista</span>
+            <span className="mb-1 block text-sm">Song and artist</span>
             <input name="query" required maxLength={200} />
           </label>
           {writeState.message ? <Notice tone="bad">{writeState.message}</Notice> : null}
-          <button className={buttonClass} disabled={disabled || writePending}>Probar agregar y borrar</button>
+          <button className={buttonClass} disabled={disabled || writePending}>Run add and remove test</button>
         </form>
       </Card>
     </>

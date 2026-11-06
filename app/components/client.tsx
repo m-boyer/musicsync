@@ -7,9 +7,9 @@ import { useEffect, useState } from 'react';
 export function LocalTime({ value }: { value: Date | string | null | undefined }) {
   const [text, setText] = useState('');
   useEffect(() => {
-    if (value) setText(new Intl.DateTimeFormat('es', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)));
+    if (value) setText(new Intl.DateTimeFormat('en', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)));
   }, [value]);
-  if (!value) return <span>nunca</span>;
+  if (!value) return <span>never</span>;
   return <time dateTime={new Date(value).toISOString()}>{text}</time>;
 }
 

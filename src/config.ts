@@ -13,7 +13,9 @@ const schema = z.object({
     .trim()
     .refine((value) => Buffer.from(value, 'base64').length === 32, 'must be 32 bytes in base64'),
   BETTER_AUTH_SECRET: z.string().trim().min(32),
-  BETTER_AUTH_URL: z.string().trim().url().default('https://musicsync.matiasboyer.com'),
+  BETTER_AUTH_URL: z.string().trim().url(),
+  // The only account that can exist.
+  ADMIN_EMAIL: z.string().trim().toLowerCase().email(),
   // Only used to create the account the first time. It can be removed afterwards.
   INITIAL_ADMIN_PASSWORD: optional,
   APP_REVISION: z.string().trim().default('unknown'),

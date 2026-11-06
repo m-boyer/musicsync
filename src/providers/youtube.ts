@@ -93,7 +93,7 @@ export function signedInClient(create: () => Promise<YouTubeClient>): () => Prom
         () => true,
         () => false,
       ));
-    if (!signedIn) throw new Error('La sesión de YouTube no es válida: cargá la cookie de nuevo');
+    if (!signedIn) throw new Error('The YouTube session is not valid: save the cookie again');
     return created;
   });
 }
@@ -170,7 +170,7 @@ export function createYouTubeDirectory(create: () => Promise<YouTubeClient>): Pl
     },
     async create(name) {
       const { playlist_id: id } = await (await client()).playlist.create(name, [], 'PRIVATE');
-      if (!id) throw new Error('YouTube no devolvió la playlist creada');
+      if (!id) throw new Error('YouTube did not return the created playlist');
       return { id, name };
     },
     async isEditable(id) {

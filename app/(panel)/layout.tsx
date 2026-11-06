@@ -4,13 +4,13 @@ import { requireSession } from '../../src/auth/guard';
 import { SignOut } from './sign-out';
 
 const LINKS = [
-  ['/', 'Inicio'],
-  ['/credentials', 'Credenciales'],
+  ['/', 'Home'],
+  ['/credentials', 'Credentials'],
   ['/playlists', 'Playlists'],
-  ['/tests', 'Pruebas'],
-  ['/settings', 'Ajustes'],
-  ['/history', 'Historial'],
-  ['/pending', 'Pendientes'],
+  ['/tests', 'Tests'],
+  ['/settings', 'Settings'],
+  ['/history', 'History'],
+  ['/pending', 'Pending'],
 ] as const;
 
 // Private pages that depend on the session: never prerendered.

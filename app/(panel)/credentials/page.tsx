@@ -10,12 +10,12 @@ const HELP = {
   apple: {
     label: 'media-user-token',
     steps:
-      'En music.apple.com con tu sesión iniciada, abrí DevTools → Application → Cookies → https://music.apple.com y copiá el valor de media-user-token. Dura unos 180 días.',
+      'Signed in on music.apple.com, open DevTools → Application → Cookies → https://music.apple.com and copy the value of media-user-token. It lasts about 180 days.',
   },
   youtube: {
     label: 'Cookie',
     steps:
-      'En una ventana privada, iniciá sesión en music.youtube.com. Abrí DevTools → Network, elegí un pedido a /youtubei/ y copiá el encabezado Cookie completo. Después cerrá esa ventana sin cerrar sesión.',
+      'In a private window, sign in on music.youtube.com. Open DevTools → Network, pick a request to /youtubei/ and copy the whole Cookie header. Then close that window without signing out.',
   },
 };
 
@@ -26,8 +26,8 @@ export default async function CredentialsPage() {
   return (
     <>
       <PageTitle
-        title="Credenciales"
-        description="Se guardan cifradas y nunca se vuelven a mostrar. Para cambiarlas, cargalas de nuevo."
+        title="Credentials"
+        description="They are stored encrypted and never shown again. To change one, save it again."
       />
       <div className="space-y-4">
         {(['apple', 'youtube'] as const).map((service) => {
@@ -36,23 +36,23 @@ export default async function CredentialsPage() {
           return (
             <Card key={service} title={SERVICE_NAMES[service]}>
               <p className="mb-3 flex flex-wrap items-center gap-2">
-                {current ? <Badge tone="ok">Cargada</Badge> : <Badge tone="bad">Sin cargar</Badge>}
+                {current ? <Badge tone="ok">Saved</Badge> : <Badge tone="bad">Not saved</Badge>}
                 {current ? (
                   <span className="text-muted">
-                    Actualizada: <LocalTime value={current.updatedAt} />
+                    Updated: <LocalTime value={current.updatedAt} />
                   </span>
                 ) : null}
               </p>
               {service === 'apple' && age >= TOKEN_WARN_DAYS ? (
                 <div className="mb-3">
-                  <Notice tone="warn">Este token tiene {age} días y vence cerca de los 180. Conviene renovarlo.</Notice>
+                  <Notice tone="warn">This token is {age} days old and expires around day 180. Renew it soon.</Notice>
                 </div>
               ) : null}
               <p className="mb-3 text-muted">{HELP[service].steps}</p>
               <CredentialForm service={service} label={HELP[service].label} />
               {current ? (
                 <form action={removeCredential.bind(null, service)} className="mt-3">
-                  <button className={secondaryButtonClass}>Quitar</button>
+                  <button className={secondaryButtonClass}>Remove</button>
                 </form>
               ) : null}
             </Card>

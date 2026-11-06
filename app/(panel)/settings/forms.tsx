@@ -25,7 +25,7 @@ export function SettingsForm({ values, fullAllowed }: { values: EditableSettings
 
   return (
     <form action={action} className="space-y-4">
-      <Field label="Modo" hint={fullAllowed ? undefined : 'El modo full se habilita cuando la prueba de agregar y quitar pase en ambas playlists.'}>
+      <Field label="Mode" hint={fullAllowed ? undefined : 'Full mode is enabled once the add and remove test passes on both playlists.'}>
         <select name="mode" value={mode} onChange={(event) => setMode(event.target.value)}>
           {Object.entries(MODE_LABELS).map(([value, label]) => (
             <option key={value} value={value} disabled={value === 'full' && !fullAllowed && values.mode !== 'full'}>
@@ -37,19 +37,19 @@ export function SettingsForm({ values, fullAllowed }: { values: EditableSettings
       {askConfirm ? (
         <label className="flex items-start gap-2">
           <input type="checkbox" name="confirmFull" className="mt-1 w-auto" />
-          <span>Entiendo que una canción que quite de una playlist se va a quitar también de la otra.</span>
+          <span>I understand that a song removed from one playlist will also be removed from the other.</span>
         </label>
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Intervalo (segundos)"><input name="intervalSeconds" type="number" min={60} max={86400} defaultValue={values.intervalSeconds} required /></Field>
-        <Field label="País de Apple Music" hint="Dos letras, por ejemplo ar o us."><input name="appleStorefront" maxLength={2} defaultValue={values.appleStorefront} required /></Field>
-        <Field label="Operaciones por ciclo"><input name="maxOpsPerCycle" type="number" min={1} max={500} defaultValue={values.maxOpsPerCycle} required /></Field>
-        <Field label="Borrados máximos por ciclo" hint="Si se supera, no se borra nada."><input name="maxDeletesPerCycle" type="number" min={0} max={100} defaultValue={values.maxDeletesPerCycle} required /></Field>
-        <Field label="Espera tras agregar (minutos)"><input name="addGraceMinutes" type="number" min={1} max={1440} defaultValue={values.addGraceMinutes} required /></Field>
-        <Field label="Umbral de coincidencia" hint="Entre 0,5 y 1."><input name="matchThreshold" type="number" min={0.5} max={1} step={0.01} defaultValue={values.matchThreshold} required /></Field>
+        <Field label="Interval (seconds)"><input name="intervalSeconds" type="number" min={60} max={86400} defaultValue={values.intervalSeconds} required /></Field>
+        <Field label="Apple Music country" hint="Two letters, for example us or ar."><input name="appleStorefront" maxLength={2} defaultValue={values.appleStorefront} required /></Field>
+        <Field label="Operations per cycle"><input name="maxOpsPerCycle" type="number" min={1} max={500} defaultValue={values.maxOpsPerCycle} required /></Field>
+        <Field label="Max removals per cycle" hint="If exceeded, nothing is removed."><input name="maxDeletesPerCycle" type="number" min={0} max={100} defaultValue={values.maxDeletesPerCycle} required /></Field>
+        <Field label="Wait after adding (minutes)"><input name="addGraceMinutes" type="number" min={1} max={1440} defaultValue={values.addGraceMinutes} required /></Field>
+        <Field label="Match threshold" hint="Between 0.5 and 1."><input name="matchThreshold" type="number" min={0.5} max={1} step={0.01} defaultValue={values.matchThreshold} required /></Field>
       </div>
       {state.message ? <Notice tone={state.ok ? 'ok' : 'bad'}>{state.message}</Notice> : null}
-      <button className={buttonClass} disabled={pending}>{pending ? 'Guardando…' : 'Guardar'}</button>
+      <button className={buttonClass} disabled={pending}>{pending ? 'Saving…' : 'Save'}</button>
     </form>
   );
 }
@@ -67,19 +67,19 @@ export function PasswordForm() {
       revokeOtherSessions: true,
     });
     if (result.error) {
-      setMessage({ ok: false, text: result.error.status === 429 ? 'Demasiados intentos. Esperá unos minutos.' : 'No se pudo cambiar. Revisá la contraseña actual.' });
+      setMessage({ ok: false, text: result.error.status === 429 ? 'Too many attempts. Wait a few minutes.' : 'The password could not be changed. Check the current password.' });
       return;
     }
     form.reset();
-    setMessage({ ok: true, text: 'Contraseña actualizada.' });
+    setMessage({ ok: true, text: 'Password updated.' });
   }
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <Field label="Contraseña actual"><input name="current" type="password" autoComplete="current-password" required /></Field>
-      <Field label="Contraseña nueva" hint={`Al menos ${MIN_PASSWORD_LENGTH} caracteres.`}><input name="next" type="password" autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} required /></Field>
+      <Field label="Current password"><input name="current" type="password" autoComplete="current-password" required /></Field>
+      <Field label="New password" hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}><input name="next" type="password" autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} required /></Field>
       {message ? <Notice tone={message.ok ? 'ok' : 'bad'}>{message.text}</Notice> : null}
-      <button className={buttonClass}>Cambiar contraseña</button>
+      <button className={buttonClass}>Change password</button>
     </form>
   );
 }

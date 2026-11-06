@@ -22,7 +22,11 @@ export async function boot(): Promise<void> {
     }
 
     const runtime = getRuntime();
-    const admin = await ensureAdmin(await runtime.auth.$context, runtime.config.INITIAL_ADMIN_PASSWORD);
+    const admin = await ensureAdmin(
+      await runtime.auth.$context,
+      runtime.config.ADMIN_EMAIL,
+      runtime.config.INITIAL_ADMIN_PASSWORD,
+    );
     if (admin === 'missing_password' || admin === 'weak_password') {
       logger.error(`Admin account not created: ${admin}`);
     }

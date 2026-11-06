@@ -85,7 +85,12 @@ function create(): Runtime {
   return {
     config,
     pool,
-    auth: createAuth({ pool, secret: config.BETTER_AUTH_SECRET, baseURL: config.BETTER_AUTH_URL }),
+    auth: createAuth({
+      pool,
+      secret: config.BETTER_AUTH_SECRET,
+      baseURL: config.BETTER_AUTH_URL,
+      adminEmail: config.ADMIN_EMAIL,
+    }),
     state,
     settings,
     credentials,

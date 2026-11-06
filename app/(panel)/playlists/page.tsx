@@ -14,7 +14,7 @@ async function listPlaylists(): Promise<Record<Service, Listing>> {
     const directories = await getDirectories(runtime);
     const list = async (service: Service): Promise<Listing> => {
       const directory = directories[service];
-      if (!directory) return { playlists: [], error: 'Primero cargá la credencial de este servicio.' };
+      if (!directory) return { playlists: [], error: 'Save the credential for this service first.' };
       try {
         return { playlists: await directory.list() };
       } catch (error) {
@@ -35,12 +35,12 @@ export default async function PlaylistsPage() {
     <>
       <PageTitle
         title="Playlists"
-        description="Elegí o creá una playlist en cada servicio. Se sincronizan solo esas dos."
+        description="Choose or create one playlist on each service. Only those two are synced."
       />
       <div className="space-y-4">
         {pairComplete ? (
           <Notice tone="neutral">
-            Cambiar cualquiera de las dos reinicia la sincronización del par y vuelve al modo simulación.
+            Changing either one restarts syncing the pair and switches back to dry-run.
           </Notice>
         ) : null}
         {(['apple', 'youtube'] as const).map((service) => {
@@ -51,10 +51,10 @@ export default async function PlaylistsPage() {
               <p className="mb-3 break-words">
                 {current ? (
                   <>
-                    Elegida: <strong>{current.name}</strong>
+                    Chosen: <strong>{current.name}</strong>
                   </>
                 ) : (
-                  <span className="text-muted">Sin playlist elegida.</span>
+                  <span className="text-muted">No playlist chosen.</span>
                 )}
               </p>
               {listing.error ? (

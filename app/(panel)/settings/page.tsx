@@ -10,9 +10,9 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <PageTitle title="Ajustes" />
+      <PageTitle title="Settings" />
       <div className="space-y-4">
-        <Card title="Sincronización">
+        <Card title="Sync">
           <SettingsForm
             fullAllowed={canUseFullMode(settings)}
             values={{
@@ -26,12 +26,12 @@ export default async function SettingsPage() {
             }}
           />
         </Card>
-        <Card title="Conexión con Apple Music">
+        <Card title="Apple Music connection">
           <p className="text-muted break-words">
-            {settings.appleBaseUrl ?? 'Host por defecto'} con {settings.appleUserTokenHeader}. Se cambia desde Pruebas.
+            {settings.appleBaseUrl ?? 'Default host'} with {settings.appleUserTokenHeader}. Change it from Tests.
           </p>
         </Card>
-        <Card title="Cambiar contraseña">
+        <Card title="Change password">
           <PasswordForm />
         </Card>
       </div>

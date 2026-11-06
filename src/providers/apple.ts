@@ -95,7 +95,7 @@ export function createAppleProvider(create: () => Promise<AppleMusic>, options: 
     },
 
     async remove(track: Track): Promise<void> {
-      if (!options.removeStrategy) throw new Error('Quitar canciones de playlists de Apple Music no está verificado');
+      if (!options.removeStrategy) throw new Error('Removing songs from Apple Music playlists is not verified');
       if (!track.removeId) throw new Error(`Song ${track.id} has no Apple library id`);
       await (await client()).Library.removeTracksFromPlaylist(options.playlistId, [track.removeId], options.removeStrategy);
     },

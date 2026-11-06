@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ADMIN_EMAIL, ensureAdmin, isAdmin } from '../src/auth/account.js';
+import { ensureAdmin, isAdmin } from '../src/auth/account.js';
+
+const ADMIN_EMAIL = 'admin@example.com';
 
 function store(existing: unknown = null) {
   return {
@@ -14,18 +16,18 @@ function store(existing: unknown = null) {
 
 describe('isAdmin', () => {
   it('accepts only the account email', () => {
-    expect(isAdmin(ADMIN_EMAIL)).toBe(true);
-    expect(isAdmin(ADMIN_EMAIL.toUpperCase())).toBe(true);
-    expect(isAdmin('someone@example.com')).toBe(false);
-    expect(isAdmin(undefined)).toBe(false);
-    expect(isAdmin(null)).toBe(false);
+    expect(isAdmin(ADMIN_EMAIL, ADMIN_EMAIL)).toBe(true);
+    expect(isAdmin(ADMIN_EMAIL.toUpperCase(), ADMIN_EMAIL)).toBe(true);
+    expect(isAdmin('someone@example.com', ADMIN_EMAIL)).toBe(false);
+    expect(isAdmin(undefined, ADMIN_EMAIL)).toBe(false);
+    expect(isAdmin(null, ADMIN_EMAIL)).toBe(false);
   });
 });
 
 describe('ensureAdmin', () => {
   it('creates the account with a hashed password', async () => {
     const s = store();
-    expect(await ensureAdmin(s, 'a-long-enough-password')).toBe('created');
+    expect(await ensureAdmin(s, ADMIN_EMAIL, 'a-long-enough-password')).toBe('created');
     expect(s.internalAdapter.createUser).toHaveBeenCalledWith(
       expect.objectContaining({ email: ADMIN_EMAIL, emailVerified: true }),
       { method: 'email-password' },
@@ -37,15 +39,15 @@ describe('ensureAdmin', () => {
 
   it('never overwrites an existing account', async () => {
     const s = store({ user: {} });
-    expect(await ensureAdmin(s, 'a-long-enough-password')).toBe('exists');
+    expect(await ensureAdmin(s, ADMIN_EMAIL, 'a-long-enough-password')).toBe('exists');
     expect(s.internalAdapter.createUser).not.toHaveBeenCalled();
     expect(s.internalAdapter.linkAccount).not.toHaveBeenCalled();
   });
 
   it('does not create an account without a valid password', async () => {
     const s = store();
-    expect(await ensureAdmin(s, undefined)).toBe('missing_password');
-    expect(await ensureAdmin(s, 'short')).toBe('weak_password');
+    expect(await ensureAdmin(s, ADMIN_EMAIL, undefined)).toBe('missing_password');
+    expect(await ensureAdmin(s, ADMIN_EMAIL, 'short')).toBe('weak_password');
     expect(s.internalAdapter.createUser).not.toHaveBeenCalled();
   });
 });

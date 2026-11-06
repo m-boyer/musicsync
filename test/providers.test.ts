@@ -94,7 +94,7 @@ describe('Apple provider', () => {
   it('refuses to remove without a verified strategy or an entry id', async () => {
     const apple = appleFake();
     const unverified = createAppleProvider(apple.client, { playlistId: 'p.1', removeStrategy: null });
-    await expect(unverified.remove({ ...track, removeId: 'i.1' })).rejects.toThrow('no está verificado');
+    await expect(unverified.remove({ ...track, removeId: 'i.1' })).rejects.toThrow('is not verified');
     const verified = createAppleProvider(apple.client, { playlistId: 'p.1', removeStrategy: 'body' });
     await expect(verified.remove(track)).rejects.toThrow('no Apple library id');
     expect(apple.Library.removeTracksFromPlaylist).not.toHaveBeenCalled();
@@ -200,13 +200,13 @@ describe('YouTube', () => {
 
   it('fails on a session that is not signed in', async () => {
     const { provider, client } = setup(false);
-    await expect(provider.read()).rejects.toThrow('no es válida');
+    await expect(provider.read()).rejects.toThrow('is not valid');
     expect(client.account.getInfo).not.toHaveBeenCalled();
   });
 
   it('fails on an expired cookie that YouTube.js still marks as signed in', async () => {
     const { provider, client } = setup(true, false);
-    await expect(provider.read()).rejects.toThrow('no es válida');
+    await expect(provider.read()).rejects.toThrow('is not valid');
     expect(client.music.getPlaylist).not.toHaveBeenCalled();
   });
 
@@ -253,7 +253,7 @@ describe('YouTube', () => {
     expect(client.playlist.create).toHaveBeenCalledWith('Mix', [], 'PRIVATE');
 
     client.playlist.create.mockResolvedValueOnce({});
-    await expect(directory.create('Mix')).rejects.toThrow('no devolvió');
+    await expect(directory.create('Mix')).rejects.toThrow('did not return');
   });
 
   it('checks whether a playlist is editable', async () => {

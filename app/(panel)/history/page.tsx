@@ -6,23 +6,23 @@ import { Badge, Card, PageTitle } from '../../components/ui';
 import { MODE_LABELS, runStatus, SERVICE_NAMES } from '../labels';
 
 const MISSING: Record<string, string> = {
-  apple: 'token de Apple',
-  youtube: 'cookie de YouTube',
-  apple_playlist: 'playlist de Apple',
-  youtube_playlist: 'playlist de YouTube',
+  apple: 'Apple token',
+  youtube: 'YouTube cookie',
+  apple_playlist: 'Apple playlist',
+  youtube_playlist: 'YouTube playlist',
 };
 
 const COUNTS: [string, string][] = [
-  ['appleSongs', 'En Apple'],
-  ['youtubeSongs', 'En YouTube'],
-  ['linkedLocally', 'Vinculadas'],
-  ['added', 'Agregadas'],
-  ['plannedAdds', 'Por agregar'],
-  ['deleted', 'Borradas'],
-  ['plannedDeletes', 'Por borrar'],
-  ['searched', 'Búsquedas'],
-  ['pending', 'Pendientes'],
-  ['failures', 'Errores'],
+  ['appleSongs', 'On Apple'],
+  ['youtubeSongs', 'On YouTube'],
+  ['linkedLocally', 'Linked'],
+  ['added', 'Added'],
+  ['plannedAdds', 'To add'],
+  ['deleted', 'Removed'],
+  ['plannedDeletes', 'To remove'],
+  ['searched', 'Searches'],
+  ['pending', 'Pending'],
+  ['failures', 'Errors'],
 ];
 
 function Songs({ title, songs }: { title: string; songs: SongSummary[] }) {
@@ -47,9 +47,9 @@ export default async function HistoryPage() {
 
   return (
     <>
-      <PageTitle title="Historial" description="Últimos ciclos, con lo que se hizo o se haría." />
+      <PageTitle title="History" description="Recent cycles, with what was done or would be done." />
       <div className="space-y-4">
-        {runs.length === 0 ? <Card><p className="text-muted">Todavía no hay ciclos.</p></Card> : null}
+        {runs.length === 0 ? <Card><p className="text-muted">No cycles yet.</p></Card> : null}
         {runs.map((run) => {
           const status = runStatus(run.status);
           const summary = run.summary as Record<string, unknown>;
@@ -69,13 +69,13 @@ export default async function HistoryPage() {
                 ))}
               </dl>
               {typeof summary.error === 'string' ? <p className="mt-2 text-bad break-words">{summary.error}</p> : null}
-              {typeof summary.blockedReason === 'string' ? <p className="mt-2 text-warn">Motivo: {summary.blockedReason}</p> : null}
+              {typeof summary.blockedReason === 'string' ? <p className="mt-2 text-warn">Reason: {summary.blockedReason}</p> : null}
               {Array.isArray(summary.missing) ? (
-                <p className="mt-2 text-muted">Falta configurar: {summary.missing.map((item) => MISSING[String(item)] ?? String(item)).join(', ')}</p>
+                <p className="mt-2 text-muted">Missing: {summary.missing.map((item) => MISSING[String(item)] ?? String(item)).join(', ')}</p>
               ) : null}
-              {summary.deleteDecision === 'over_limit' ? <p className="mt-2 text-warn">No se borró nada: se superó el límite por ciclo.</p> : null}
-              <Songs title={run.mode === 'dry-run' ? 'Se agregarían' : 'Agregadas'} songs={(summary.addSample as SongSummary[]) ?? []} />
-              <Songs title={summary.deleted ? 'Borradas' : 'Se borrarían'} songs={(summary.deleteSample as SongSummary[]) ?? []} />
+              {summary.deleteDecision === 'over_limit' ? <p className="mt-2 text-warn">Nothing was removed: the per-cycle limit was exceeded.</p> : null}
+              <Songs title={run.mode === 'dry-run' ? 'Would add' : 'Added'} songs={(summary.addSample as SongSummary[]) ?? []} />
+              <Songs title={summary.deleted ? 'Removed' : 'Would remove'} songs={(summary.deleteSample as SongSummary[]) ?? []} />
             </Card>
           );
         })}

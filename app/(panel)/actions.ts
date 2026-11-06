@@ -24,11 +24,11 @@ export async function saveCredential(rawService: string, _prev: FormState, data:
   await requireSession();
   const parsedService = service.parse(rawService);
   const value = String(data.get('value') ?? '').trim();
-  if (!value) return { ok: false, message: 'Pegá un valor.' };
-  if (value.length > MAX_CREDENTIAL_LENGTH) return { ok: false, message: 'El valor es demasiado largo.' };
+  if (!value) return { ok: false, message: 'Paste a value.' };
+  if (value.length > MAX_CREDENTIAL_LENGTH) return { ok: false, message: 'The value is too long.' };
   await getRuntime().credentials.save(parsedService, value);
   revalidatePath('/', 'layout');
-  return { ok: true, message: 'Guardado.' };
+  return { ok: true, message: 'Saved.' };
 }
 
 export async function removeCredential(rawService: string): Promise<void> {
@@ -46,35 +46,35 @@ export async function runNow(): Promise<void> {
 export async function saveSettings(_prev: FormState, data: FormData): Promise<FormState> {
   await requireSession();
   const parsed = editableSettings.safeParse(Object.fromEntries(data));
-  if (!parsed.success) return { ok: false, message: 'Revisá los valores: alguno está fuera de rango.' };
+  if (!parsed.success) return { ok: false, message: 'Check the values: one of them is out of range.' };
 
   const runtime = getRuntime();
   const current = await runtime.settings.get();
   if (parsed.data.mode === 'full' && current.mode !== 'full') {
     if (!canUseFullMode(current)) {
-      return { ok: false, message: 'El modo full requiere que la prueba de agregar y quitar pase en ambas playlists.' };
+      return { ok: false, message: 'Full mode requires the add and remove test to pass on both playlists.' };
     }
     if (data.get('confirmFull') !== 'on') {
-      return { ok: false, message: 'Confirmá que querés replicar borrados.' };
+      return { ok: false, message: 'Confirm that you want removals to be copied.' };
     }
   }
   await runtime.settings.update(parsed.data);
   revalidatePath('/', 'layout');
-  return { ok: true, message: 'Guardado. Se aplica desde el próximo ciclo.' };
+  return { ok: true, message: 'Saved. It applies from the next cycle.' };
 }
 
 export async function startTest(kind: ProbeKind, _prev: FormState, data: FormData): Promise<FormState> {
   await requireSession();
   const query = String(data.get('query') ?? '').trim();
-  if (kind === 'write' && !query) return { ok: false, message: 'Escribí una canción que no tengas.' };
+  if (kind === 'write' && !query) return { ok: false, message: 'Enter a song you do not have.' };
 
   const runtime = getRuntime();
-  if (runtime.controller.state().exclusiveRunning) return { ok: false, message: 'Ya hay una prueba en curso.' };
+  if (runtime.controller.state().exclusiveRunning) return { ok: false, message: 'A test is already running.' };
   try {
     await startProbe(runtime, kind, query);
   } catch (error) {
     logger.error('Could not start the test', safeError(error));
-    return { ok: false, message: 'No se pudo iniciar la prueba.' };
+    return { ok: false, message: 'The test could not be started.' };
   }
   revalidatePath('/tests');
   return { ok: true };
@@ -138,19 +138,19 @@ export async function choosePlaylist(rawService: string, _prev: FormState, data:
   await requireSession();
   const parsedService = service.parse(rawService);
   const id = String(data.get('id') ?? '');
-  if (!id) return { ok: false, message: 'Elegí una playlist.' };
+  if (!id) return { ok: false, message: 'Choose a playlist.' };
   if ((await needsConfirmation(parsedService, id)) && data.get('confirmChange') !== 'on') {
-    return { ok: false, message: 'Confirmá el cambio: la sincronización del par actual vuelve a empezar.' };
+    return { ok: false, message: 'Confirm the change: syncing the current pair starts over.' };
   }
 
   const runtime = getRuntime();
   try {
     const playlist = await runtime.controller.exclusive(async (): Promise<PlaylistInfo | string> => {
       const directory = (await getDirectories(runtime))[parsedService];
-      if (!directory) return 'Primero cargá la credencial de este servicio.';
+      if (!directory) return 'Save the credential for this service first.';
       const found = (await directory.list()).find((item) => item.id === id);
-      if (!found) return 'No encontré esa playlist.';
-      if (!(await directory.isEditable(id))) return 'Esa playlist no se puede editar desde tu cuenta.';
+      if (!found) return 'That playlist was not found.';
+      if (!(await directory.isEditable(id))) return 'That playlist cannot be edited from your account.';
       return found;
     });
     if (typeof playlist === 'string') return { ok: false, message: playlist };
@@ -161,24 +161,24 @@ export async function choosePlaylist(rawService: string, _prev: FormState, data:
     runtime.loader.reset();
   }
   revalidatePath('/', 'layout');
-  return { ok: true, message: 'Playlist elegida.' };
+  return { ok: true, message: 'Playlist chosen.' };
 }
 
 export async function createPlaylist(rawService: string, _prev: FormState, data: FormData): Promise<FormState> {
   await requireSession();
   const parsedService = service.parse(rawService);
   const name = String(data.get('name') ?? '').trim();
-  if (!name) return { ok: false, message: 'Escribí un nombre.' };
-  if (name.length > MAX_PLAYLIST_NAME) return { ok: false, message: 'El nombre es demasiado largo.' };
+  if (!name) return { ok: false, message: 'Enter a name.' };
+  if (name.length > MAX_PLAYLIST_NAME) return { ok: false, message: 'The name is too long.' };
   if ((await needsConfirmation(parsedService, undefined)) && data.get('confirmChange') !== 'on') {
-    return { ok: false, message: 'Confirmá el cambio: la sincronización del par actual vuelve a empezar.' };
+    return { ok: false, message: 'Confirm the change: syncing the current pair starts over.' };
   }
 
   const runtime = getRuntime();
   try {
     const playlist = await runtime.controller.exclusive(async () => {
       const directory = (await getDirectories(runtime))[parsedService];
-      if (!directory) throw new Error('Primero cargá la credencial de este servicio.');
+      if (!directory) throw new Error('Save the credential for this service first.');
       return directory.create(name);
     });
     await runtime.settings.selectPlaylist(parsedService, playlist);
@@ -188,5 +188,5 @@ export async function createPlaylist(rawService: string, _prev: FormState, data:
     runtime.loader.reset();
   }
   revalidatePath('/', 'layout');
-  return { ok: true, message: `Creada y elegida: ${name}.` };
+  return { ok: true, message: `Created and chosen: ${name}.` };
 }

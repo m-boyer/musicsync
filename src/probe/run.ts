@@ -72,7 +72,7 @@ function clientFor(deps: ProbeDeps, token: string, connection: Connection): Prom
 async function findAppleConnections(deps: ProbeDeps, token: string): Promise<Connection[]> {
   const working: Connection[] = [];
   for (const connection of orderedConnections(deps.preferredConnection)) {
-    const name = `Apple: conectar con ${hostOf(connection.baseUrl)} y ${connection.header}`;
+    const name = `Apple: connect with ${hostOf(connection.baseUrl)} and ${connection.header}`;
     try {
       const client = await clientFor(deps, token, connection);
       await client.Library.getSongs(1, 0);
@@ -89,9 +89,9 @@ async function readApplePlaylist(deps: ProbeDeps, token: string, connection: Con
   const client = await clientFor(deps, token, connection);
   const { items, complete } = await client.Library.getAllPlaylistTracks(playlistId);
   await deps.report({
-    name: 'Apple: leer la playlist elegida',
+    name: 'Apple: read the chosen playlist',
     ok: complete,
-    detail: `${items.length} canciones${complete ? '' : ', lectura incompleta'}`,
+    detail: `${items.length} songs${complete ? '' : ', incomplete read'}`,
   });
 }
 
@@ -99,22 +99,22 @@ async function probeYouTubeRead(deps: ProbeDeps, youtube: MusicProvider): Promis
   try {
     const { tracks, complete } = await youtube.read();
     await deps.report({
-      name: 'YouTube: leer la playlist elegida',
+      name: 'YouTube: read the chosen playlist',
       ok: complete,
-      detail: `${tracks.length} canciones${complete ? '' : ', lectura incompleta'}`,
+      detail: `${tracks.length} songs${complete ? '' : ', incomplete read'}`,
     });
     return complete;
   } catch (error) {
-    await deps.report({ name: 'YouTube: leer la playlist elegida', ok: false, detail: safeError(error).message });
+    await deps.report({ name: 'YouTube: read the chosen playlist', ok: false, detail: safeError(error).message });
     return false;
   }
 }
 
 async function reportMissing(deps: ProbeDeps): Promise<{ apple?: string; youtube?: string }> {
   const missing: { apple?: string; youtube?: string } = {};
-  if (!deps.appleToken) missing.apple = 'Falta cargar el token';
-  else if (!deps.applePlaylistId) missing.apple = 'Falta elegir la playlist';
-  if (!deps.youtube) missing.youtube = deps.youtubeMissing ?? 'Falta cargar la cookie';
+  if (!deps.appleToken) missing.apple = 'Token not saved';
+  else if (!deps.applePlaylistId) missing.apple = 'No playlist chosen';
+  if (!deps.youtube) missing.youtube = deps.youtubeMissing ?? 'Cookie not saved';
   if (missing.apple) await deps.report({ name: 'Apple', ok: false, detail: missing.apple });
   return missing;
 }
@@ -129,17 +129,17 @@ export async function runReadProbe(deps: ProbeDeps): Promise<void> {
       try {
         await readApplePlaylist(deps, token, first, deps.applePlaylistId);
       } catch (error) {
-        await deps.report({ name: 'Apple: leer la playlist elegida', ok: false, detail: safeError(error).message });
+        await deps.report({ name: 'Apple: read the chosen playlist', ok: false, detail: safeError(error).message });
       }
     } else if (!deps.applePlaylistId) {
-      await deps.report({ name: 'Apple: playlist', ok: false, detail: 'Falta elegir la playlist' });
+      await deps.report({ name: 'Apple: playlist', ok: false, detail: 'No playlist chosen' });
     }
   } else {
-    await deps.report({ name: 'Apple', ok: false, detail: 'Falta cargar el token' });
+    await deps.report({ name: 'Apple', ok: false, detail: 'Token not saved' });
   }
 
   if (deps.youtube) await probeYouTubeRead(deps, deps.youtube);
-  else await deps.report({ name: 'YouTube', ok: false, detail: deps.youtubeMissing ?? 'Falta cargar la cookie' });
+  else await deps.report({ name: 'YouTube', ok: false, detail: deps.youtubeMissing ?? 'Cookie not saved' });
 }
 
 async function probeAppleWrite(deps: ProbeDeps, token: string, playlistId: string, query: string): Promise<void> {
@@ -151,7 +151,7 @@ async function probeAppleWrite(deps: ProbeDeps, token: string, playlistId: strin
   const { results } = await finder.Search.search({ term: query, types: [ResourceType.Songs], limit: 1 });
   const song = results.songs?.data?.[0] as { id: string; attributes?: { name?: string } } | undefined;
   if (!song) {
-    await deps.report({ name: 'Apple: buscar canción de prueba', ok: false, detail: 'Sin resultados' });
+    await deps.report({ name: 'Apple: find a test song', ok: false, detail: 'No results' });
     return;
   }
   const label = song.attributes?.name ?? song.id;
@@ -163,19 +163,19 @@ async function probeAppleWrite(deps: ProbeDeps, token: string, playlistId: strin
 
   if (await findEntry(first)) {
     await deps.report({
-      name: 'Apple: canción de prueba',
+      name: 'Apple: test song',
       ok: false,
-      detail: 'Ya está en la playlist, así que no la toco. Elegí otra.',
+      detail: 'It is already in the playlist, so it is left alone. Pick another one.',
     });
     return;
   }
-  await deps.report({ name: 'Apple: canción de prueba', ok: true, detail: label });
+  await deps.report({ name: 'Apple: test song', ok: true, detail: label });
 
   try {
     await (await clientFor(deps, token, first)).Library.addTracksToPlaylist(playlistId, [song.id]);
-    await deps.report({ name: 'Apple: agregar a la playlist', ok: true });
+    await deps.report({ name: 'Apple: add to the playlist', ok: true });
   } catch (error) {
-    await deps.report({ name: 'Apple: agregar a la playlist', ok: false, detail: safeError(error).message });
+    await deps.report({ name: 'Apple: add to the playlist', ok: false, detail: safeError(error).message });
     return;
   }
 
@@ -187,16 +187,16 @@ async function probeAppleWrite(deps: ProbeDeps, token: string, playlistId: strin
   }, waitMs);
   if (!entry) {
     await deps.report({
-      name: 'Apple: ver la canción agregada',
+      name: 'Apple: see the added song',
       ok: false,
-      detail: `No apareció en la playlist. Si aparece más tarde, quitá "${label}" a mano.`,
+      detail: `It did not show up in the playlist. If it shows up later, remove "${label}" by hand.`,
     });
     return;
   }
 
   for (const connection of connections) {
     for (const strategy of PLAYLIST_REMOVE_STRATEGIES) {
-      const name = `Apple: quitar (${strategy}) con ${hostOf(connection.baseUrl)} y ${connection.header}`;
+      const name = `Apple: remove (${strategy}) with ${hostOf(connection.baseUrl)} and ${connection.header}`;
       try {
         await (await clientFor(deps, token, connection)).Library.removeTracksFromPlaylist(playlistId, [entry.id], strategy);
       } catch (error) {
@@ -204,7 +204,7 @@ async function probeAppleWrite(deps: ProbeDeps, token: string, playlistId: strin
         continue;
       }
       const gone = await waitFor(async () => (await findEntry(connection)) === undefined, waitMs);
-      await deps.report({ name, ok: gone, ...(gone ? {} : { detail: 'Respondió bien pero la canción sigue en la playlist' }) });
+      await deps.report({ name, ok: gone, ...(gone ? {} : { detail: 'The request succeeded but the song is still in the playlist' }) });
       if (gone) {
         await deps.appleRemovalVerified?.({ strategy, ...connection });
         return;
@@ -213,9 +213,9 @@ async function probeAppleWrite(deps: ProbeDeps, token: string, playlistId: strin
   }
 
   await deps.report({
-    name: 'Apple: quitar',
+    name: 'Apple: remove',
     ok: false,
-    detail: `Ninguna forma pudo quitar "${label}" de la playlist. Quitala a mano. El modo full va a seguir bloqueado.`,
+    detail: `No method could remove "${label}" from the playlist. Remove it by hand. Full mode stays blocked.`,
   });
 }
 
@@ -224,37 +224,37 @@ async function probeYouTubeWrite(deps: ProbeDeps, youtube: MusicProvider, query:
 
   const [song] = await youtube.search({ id: '', title: query, artist: '' });
   if (!song) {
-    await deps.report({ name: 'YouTube: buscar canción de prueba', ok: false, detail: 'Sin resultados' });
+    await deps.report({ name: 'YouTube: find a test song', ok: false, detail: 'No results' });
     return;
   }
 
   const inPlaylist = async () => (await youtube.read()).tracks.some((track) => track.id === song.id);
   if (await inPlaylist()) {
     await deps.report({
-      name: 'YouTube: canción de prueba',
+      name: 'YouTube: test song',
       ok: false,
-      detail: 'Ya está en la playlist, así que no la toco. Elegí otra.',
+      detail: 'It is already in the playlist, so it is left alone. Pick another one.',
     });
     return;
   }
-  await deps.report({ name: 'YouTube: canción de prueba', ok: true, detail: song.title });
+  await deps.report({ name: 'YouTube: test song', ok: true, detail: song.title });
 
   const waitMs = deps.waitMs ?? POLL_INTERVAL_MS;
   await youtube.add(song);
   const added = await waitFor(inPlaylist, waitMs);
   await deps.report({
-    name: 'YouTube: agregar a la playlist',
+    name: 'YouTube: add to the playlist',
     ok: added,
-    ...(added ? {} : { detail: `No apareció en la playlist. Si aparece más tarde, quitá "${song.title}" a mano.` }),
+    ...(added ? {} : { detail: `It did not show up in the playlist. If it shows up later, remove "${song.title}" by hand.` }),
   });
   if (!added) return;
 
   await youtube.remove(song);
   const gone = await waitFor(async () => !(await inPlaylist()), waitMs);
   await deps.report({
-    name: 'YouTube: quitar de la playlist',
+    name: 'YouTube: remove from the playlist',
     ok: gone,
-    ...(gone ? {} : { detail: `Sigue en la playlist: "${song.title}". Quitala a mano.` }),
+    ...(gone ? {} : { detail: `Still in the playlist: "${song.title}". Remove it by hand.` }),
   });
   if (gone) await deps.youtubeRemovalVerified?.();
 }
@@ -283,6 +283,6 @@ export async function runWriteProbe(deps: ProbeDeps, query: string): Promise<voi
     const youtube = deps.youtube;
     await guarded('YouTube', () => probeYouTubeWrite(deps, youtube, query));
   } else {
-    await deps.report({ name: 'YouTube', ok: false, detail: missing.youtube ?? 'Falta cargar la cookie' });
+    await deps.report({ name: 'YouTube', ok: false, detail: missing.youtube ?? 'Cookie not saved' });
   }
 }

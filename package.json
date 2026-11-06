@@ -1,6 +1,8 @@
 {
   "name": "musicsync",
   "version": "0.1.0",
+  "description": "Keeps an Apple Music playlist and a YouTube Music playlist in sync",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "engines": {

@@ -23,8 +23,8 @@ export function LoginForm({ email }: { email: string }) {
     if (result.error) {
       setError(
         result.error.status === 429
-          ? 'Demasiados intentos. Esperá unos minutos.'
-          : 'El email o la contraseña no son correctos.',
+          ? 'Too many attempts. Wait a few minutes.'
+          : 'The email or password is incorrect.',
       );
       return;
     }
@@ -39,12 +39,12 @@ export function LoginForm({ email }: { email: string }) {
         <input name="email" type="email" defaultValue={email} autoComplete="username" required />
       </label>
       <label className="block">
-        <span className="mb-1 block text-sm">Contraseña</span>
+        <span className="mb-1 block text-sm">Password</span>
         <input name="password" type="password" autoComplete="current-password" autoFocus required />
       </label>
       {error ? <Notice tone="bad">{error}</Notice> : null}
       <button className={`${buttonClass} w-full`} disabled={busy}>
-        {busy ? 'Entrando…' : 'Entrar'}
+        {busy ? 'Signing in…' : 'Sign in'}
       </button>
     </form>
   );

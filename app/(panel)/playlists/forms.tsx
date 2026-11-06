@@ -9,7 +9,7 @@ function Confirm() {
   return (
     <label className="flex items-start gap-2">
       <input type="checkbox" name="confirmChange" className="mt-1 w-auto" />
-      <span>Entiendo que la sincronización del par actual vuelve a empezar.</span>
+      <span>I understand that syncing the current pair starts over.</span>
     </label>
   );
 }
@@ -34,13 +34,13 @@ export function PlaylistForms({
     <div className="space-y-5">
       <form action={chooseAction} className="space-y-3">
         <label className="block">
-          <span className="mb-1 block text-sm">Tus playlists</span>
+          <span className="mb-1 block text-sm">Your playlists</span>
           {playlists.length === 0 ? (
-            <span className="block text-muted">No encontré playlists que puedas editar. Creá una abajo.</span>
+            <span className="block text-muted">No playlists you can edit were found. Create one below.</span>
           ) : (
             <select name="id" value={selected} onChange={(event) => setSelected(event.target.value)} required>
               <option value="" disabled>
-                Elegí una
+                Choose one
               </option>
               {playlists.map((playlist) => (
                 <option key={playlist.id} value={playlist.id}>
@@ -54,21 +54,21 @@ export function PlaylistForms({
         {chooseState.message ? <Notice tone={chooseState.ok ? 'ok' : 'bad'}>{chooseState.message}</Notice> : null}
         {playlists.length > 0 ? (
           <button className={buttonClass} disabled={choosing || selected === '' || selected === currentId}>
-            {choosing ? 'Guardando…' : 'Usar esta playlist'}
+            {choosing ? 'Saving…' : 'Use this playlist'}
           </button>
         ) : null}
       </form>
 
       <form action={createAction} className="space-y-3 border-t border-line pt-4">
         <label className="block">
-          <span className="mb-1 block text-sm">Crear una nueva</span>
-          <input name="name" maxLength={100} placeholder="Nombre de la playlist" required />
+          <span className="mb-1 block text-sm">Create a new one</span>
+          <input name="name" maxLength={100} placeholder="Playlist name" required />
         </label>
-        {service === 'youtube' ? <p className="text-sm text-muted">Se crea como privada.</p> : null}
+        {service === 'youtube' ? <p className="text-sm text-muted">It is created as private.</p> : null}
         {askConfirm ? <Confirm /> : null}
         {createState.message ? <Notice tone={createState.ok ? 'ok' : 'bad'}>{createState.message}</Notice> : null}
         <button className={secondaryButtonClass} disabled={creating}>
-          {creating ? 'Creando…' : 'Crear y usar'}
+          {creating ? 'Creating…' : 'Create and use'}
         </button>
       </form>
     </div>

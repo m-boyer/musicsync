@@ -42,7 +42,7 @@ export class CredentialsRepo {
         values[row.service as Service] = decryptSecret(row.ciphertext, row.service, this.key);
       } catch {
         throw new Error(
-          'No se pueden descifrar las credenciales guardadas. Si cambió APP_ENCRYPTION_KEY, volvé a cargarlas.',
+          'Saved credentials cannot be decrypted. If APP_ENCRYPTION_KEY changed, save them again.',
         );
       }
     }

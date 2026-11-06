@@ -20,7 +20,7 @@ export function CredentialForm({ service, label }: { service: string; label: str
       </label>
       {state.message ? <Notice tone={state.ok ? 'ok' : 'bad'}>{state.message}</Notice> : null}
       <button className={buttonClass} disabled={pending}>
-        {pending ? 'Guardando…' : 'Guardar'}
+        {pending ? 'Saving…' : 'Save'}
       </button>
     </form>
   );

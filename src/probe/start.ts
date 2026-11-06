@@ -25,7 +25,7 @@ export async function startProbe(runtime: Runtime, kind: ProbeKind, query: strin
           cookie && youtubePlaylist
             ? createYouTubeProvider(() => createYouTubeClient(cookie), youtubePlaylist.id)
             : undefined,
-        youtubeMissing: cookie ? 'Falta elegir la playlist' : 'Falta cargar la cookie',
+        youtubeMissing: cookie ? 'No playlist chosen' : 'Cookie not saved',
         report: (step) => runtime.probes.addStep(id, step),
         appleRemovalVerified: async ({ strategy, baseUrl, header }) => {
           await runtime.settings.setAppleRemoveStrategy(strategy);

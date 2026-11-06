@@ -5,7 +5,7 @@ import { isAdmin, MIN_PASSWORD_LENGTH } from './account.js';
 
 const SEVEN_DAYS = 60 * 60 * 24 * 7;
 
-export function createAuth(options: { pool: pg.Pool; secret: string; baseURL: string }) {
+export function createAuth(options: { pool: pg.Pool; secret: string; baseURL: string; adminEmail: string }) {
   return betterAuth({
     database: options.pool,
     secret: options.secret,
@@ -26,7 +26,7 @@ export function createAuth(options: { pool: pg.Pool; secret: string; baseURL: st
       user: {
         create: {
           // A second safeguard: no other account can ever be created.
-          before: async (user) => (isAdmin(user.email) ? undefined : false),
+          before: async (user) => (isAdmin(user.email, options.adminEmail) ? undefined : false),
         },
       },
     },

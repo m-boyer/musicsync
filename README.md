@@ -1,66 +1,77 @@
 # musicsync
 
-Keeps one Apple Music playlist and one YouTube Music playlist the same. A Next.js app runs the sync every few minutes and lets you manage it from the web.
+Keeps one Apple Music playlist and one YouTube Music playlist in sync, in both directions. Add a song to either playlist and it shows up in the other. With removals turned on, removing one removes it from the other too.
 
-- **Apple Music:** [fork of applemusic-api](https://github.com/MatiasBoyer/applemusic-api).
-- **YouTube Music:** [YouTube.js](https://github.com/LuanRT/YouTube.js).
+It is a small self-hosted Next.js app with Postgres. It runs the sync every few minutes and has a web panel to manage it.
 
-Both use unofficial interfaces, which can stop working without notice.
+> [!WARNING]
+> Neither service offers a public API for this. musicsync uses the private APIs that the Apple Music and YouTube Music web players use, through [a fork of applemusic-api](https://github.com/MatiasBoyer/applemusic-api) and [YouTube.js](https://github.com/LuanRT/YouTube.js). They can change or stop working without notice. Use it with your own accounts, at your own risk.
 
-## What the web does
+## Features
 
-- **Inicio:** status, last and next cycle, and a button to sync now.
-- **Credenciales:** load each service's token. They are stored encrypted and never shown again.
-- **Playlists:** choose or create the playlist to sync on each service. Changing either one restarts the pair in dry-run.
-- **Pruebas:** read both playlists, and add and remove a test song. Apple does not document removing songs from a playlist, so the test tries each known way and saves the one that works.
-- **Ajustes:** mode, interval, limits and password. `full` is only allowed once the add and remove test passed on both playlists.
-- **Historial:** recent cycles, with what was or would be added and deleted.
-- **Pendientes:** songs without a safe match: retry, ignore or pick the right song.
+- **Pick or create the playlists** to sync on each service from the web.
+- **Two-way sync** that remembers which songs it already linked, so it can tell a new song from a removed one.
+- **Song matching** by title, artist and duration, with a review screen for songs without a confident match.
+- **Three modes:** simulate (`dry-run`), add only (`add-only`), and add and remove (`full`).
+- **Safety limits:** a cycle that cannot read a playlist, or would remove too many songs, changes nothing.
+- **Built-in tests** that check what each service allows from your server before you turn on removals.
+- **Encrypted credentials:** tokens are stored encrypted in Postgres and never shown again.
+- **One account,** with sign-up disabled and rate-limited sign-in.
 
-## Access
+## Quick start
 
-There is a single account, `matiasboyer7@gmail.com`, managed with Better Auth. Sign up and password reset are disabled. The account is created on the first start from `INITIAL_ADMIN_PASSWORD`, and the password can then be changed from Ajustes. Sign in is limited to 5 attempts every 5 minutes.
+You need Node.js 22 or later and Postgres.
 
-## Environment
+```bash
+git clone https://github.com/m-boyer/musicsync.git
+cd musicsync
+npm ci
+cp .env.example .env.local
+```
 
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | Postgres for state, settings, encrypted credentials and sessions. |
-| `APP_ENCRYPTION_KEY` | `openssl rand -base64 32`. Encrypts the tokens. If it changes, load them again. |
-| `BETTER_AUTH_SECRET` | `openssl rand -base64 32`. Signs sessions. |
-| `BETTER_AUTH_URL` | Public URL. Defaults to `https://musicsync.matiasboyer.com`. |
-| `INITIAL_ADMIN_PASSWORD` | Creates the account the first time. At least 12 characters. |
-| `SENTRY_DSN` | Optional error reporting. |
+Fill in `.env.local` (see [Configuration](#configuration)), then start the app:
 
-Everything else is set from the web.
+```bash
+npm run dev
+```
 
-## Modes
+Open http://localhost:3000, sign in with `ADMIN_EMAIL` and `INITIAL_ADMIN_PASSWORD`, and follow [the setup guide](docs/setup.md) to add your credentials and choose the playlists.
 
-| Mode | What it does |
-|---|---|
-| `dry-run` (default) | Reads, links songs already on both sides, and records what it would do. |
-| `add-only` | Adds new songs in both directions. |
-| `full` | Also replicates removals. |
+To run it in production, see [Deployment](docs/setup.md#deployment).
 
-Songs are matched, not their order, and a repeated song counts once.
+## Configuration
 
-## Safety rules
+| Variable | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | Yes | Postgres connection string. Stores the sync state, settings, encrypted credentials and sessions. |
+| `APP_ENCRYPTION_KEY` | Yes | 32 random bytes in base64: `openssl rand -base64 32`. Encrypts the saved credentials. If it changes, save them again. |
+| `BETTER_AUTH_SECRET` | Yes | At least 32 characters: `openssl rand -base64 32`. Signs sessions. |
+| `BETTER_AUTH_URL` | Yes | The app's public URL, for example `https://musicsync.example.com`. |
+| `ADMIN_EMAIL` | Yes | The only account that can sign in. |
+| `INITIAL_ADMIN_PASSWORD` | First start | Creates the account the first time, with at least 12 characters. It is never used again, so you can remove it afterwards and change the password from Settings. |
+| `SENTRY_DSN` | No | Error reporting. |
+| `LOG_LEVEL` | No | `debug`, `info` (default), `warn` or `error`. |
 
-- A cycle changes nothing if a read fails, does not finish, or returns empty for a service that had linked songs.
-- A song is only deleted if it was seen on both sides and then removed from one, so the first cycle never deletes.
-- The maximum deletions per cycle blocks the whole batch if exceeded.
-- The maximum operations per cycle makes the first load happen in batches.
-- A recently added song is not treated as deleted during the grace period.
-- An expired YouTube cookie is detected by reading the account, instead of looking like an empty list.
-- Tokens never reach pages, logs, Sentry or the run history.
+Everything else is set from the web panel.
+
+## Documentation
+
+- [Setup guide](docs/setup.md): credentials, choosing playlists, the first sync and deployment.
+- [How it works](docs/how-it-works.md): the sync cycle, matching, modes and safety rules.
 
 ## Development
 
 ```bash
-npm ci
 npm run typecheck
+npm test
 npm run test:coverage
-npm run dev
+npm run build
 ```
 
-Pushing to `master` tests, builds and deploys through `m-boyer/Pipelines`. Migrations run when the server starts.
+The sync logic lives in `src/sync`, the service clients in `src/providers`, and the web panel in `app`. Database migrations are in `migrations` and run when the server starts.
+
+## License
+
+[MIT](LICENSE)
+
+musicsync is not affiliated with Apple or Google. Apple Music and YouTube Music are trademarks of their respective owners.
